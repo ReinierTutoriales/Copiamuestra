@@ -51,7 +51,7 @@ void CXCFileDataBuffer::Release()
 	if(m_pBlockBuf!=NULL)
 	{
 		::VirtualUnlock(m_pBlockBuf,m_nChunkSize) ;
-		::VirtualFree(m_pBlockBuf,0,MEM_RELEASE) ;
+		::VirtualFree(m_pBlockBuf,m_nChunkSize,MEM_RELEASE) ;
 		//::free(m_pBlockBuf) ;
 		m_pBlockBuf = NULL ;
 	}
@@ -118,7 +118,7 @@ bool CXCFileDataBuffer::AllocateChunk(int nChunkSize,int nAlignSize)
 
 	if(m_pBlockBuf!=NULL)
 	{
-		::VirtualLock(m_pBlockBuf,nChunkSize) ; // keep resident for performance
+		::VirtualLock(m_pBlockBuf,nChunkSize) ; // 让其在程序运行期间常驻内存，以提高性能
 
 		m_nRefNum = ALIGN_SIZE_DOWN(nChunkSize,m_nPageSize)/m_nPageSize ;
 		m_pRefCountBuf = (BYTE*)::malloc(m_nRefNum) ;
@@ -164,6 +164,40 @@ bool CXCFileDataBuffer::IsFull()
 
 	return m_nRefPageCount==m_nRefNum ;
 }
+//
+//void CXCFileDataBuffer::WaitForEvent(EWaitForEventType wfet,HANDLE hEvent,DWORD dwInterval)
+//{
+//	if(hEvent!=NULL)
+//	{
+//		{
+//			CptAutoLock lock(&m_Lock) ;
+//
+//			switch(wfet)
+//			{
+//			case WFET_WaitForBufNotFull:
+//			case WFET_WaitForBufEmpty: 
+//				if(m_nRefPageCount==0)
+//				{
+//					return ;
+//				}
+//				break ;
+//
+//			case WFET_WaitForBufNotEmpty:
+//			case WFET_WaitForBufFull:
+//				if(m_nRefPageCount==m_nRefNum)
+//				{
+//					return ;
+//				}
+//				break ;
+//			}
+//
+//			m_BufEvent[(int)wfet].push_back(hEvent) ;
+//		}
+//
+//		::WaitForSingleObject(hEvent,dwInterval) ;
+//	}
+//}
+
 
 int CXCFileDataBuffer::GetRemainSpace() 
 {
@@ -179,9 +213,10 @@ int CXCFileDataBuffer::GetBottomRemainSpace()
 	CptAutoLock lcok(&m_Lock) ;
 
 	int nIndex = m_nCurAllocIndex ;
+	int nDistance = 0 ;
 
 	while(nIndex<m_nRefNum && m_pRefCountBuf[nIndex]>0)
-	{
+	{// 找出下一个干净的页面的起始位置
 		++nIndex ;
 	}
 
@@ -194,7 +229,7 @@ int CXCFileDataBuffer::GetBottomRemainSpace()
 		int nIndex2 = nIndex+1 ;
 
 		while(nIndex2<m_nRefNum && m_pRefCountBuf[nIndex2]==0)
-		{
+		{// 找出下一个'不'干净的页面的起始位置
 			++nIndex2 ;
 		}
 
@@ -206,8 +241,11 @@ int CXCFileDataBuffer::GetBottomRemainSpace()
 #ifdef _DEBUG
 void CXCFileDataBuffer::CheckBufAlloc() 
 {
-	int nNonSwitchZero = 0 ;
-	int nZeroSwitchNon = 0 ;
+	int nNonSwitchZero = 0 ; // 从 '有' 到 '空' 切换次数
+	int nZeroSwitchNon = 0 ; // 从 '空' 到 '有' 切换次数
+
+	bool bHaveZero = false ;
+	bool bHaveNonZero = false ;
 
 	for(int i=1;i<m_nRefNum;++i)
 	{
@@ -227,6 +265,30 @@ void CXCFileDataBuffer::CheckBufAlloc()
 				_ASSERT(FALSE) ;
 			}
 		}
+
+	}
+
+}
+
+
+void CXCFileDataBuffer::SaveAllocIDRecored() 
+{
+	HANDLE hFile = ::CreateFile(_T("x:\\AllocIDRecordBuf.txt"),GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL) ;
+
+	if(hFile!=INVALID_HANDLE_VALUE)
+	{
+		DWORD dwWritten ;
+		
+		for(int i=0;i<m_nRefNum;++i)
+		{
+			CptString str ;
+
+			str.Format(_T("%04d  "),m_pAllocIDRecordBuf[i]) ;
+			::WriteFile(hFile,str.c_str(),str.GetLength()*sizeof(TCHAR),&dwWritten,NULL) ;
+		}
+		//::WriteFile(hFile,m_pAllocIDRecordBuf,m_nRefNum*sizeof(unsigned),&dwWritten,NULL) ;
+		::FlushFileBuffers(hFile) ;
+		::CloseHandle(hFile) ;
 	}
 }
 #endif
@@ -242,22 +304,87 @@ void CXCFileDataBuffer::Free(void* pBuf,int nSize)
 	_ASSERT(pBuf!=NULL) ;
 
 	const int nOffset = (int)((BYTE*)pBuf - m_pBlockBuf)  ;
-	_ASSERT(nOffset%m_nPageSize ? FALSE : TRUE) ;
-	const int nIndex = nOffset/m_nPageSize ;
+
+	_ASSERT(nOffset%m_nPageSize ? FALSE : TRUE) ; // 若偏移不为页面的倍数，那么就出问题了
+
+	const int nIndex = nOffset/m_nPageSize ;//+ (nOffset%m_nPageSize ? 1 : 0);
+
 	_ASSERT(m_nRefNum>nIndex) ;
+
 	const int nPageCount = nSize/m_nPageSize + (nSize%m_nPageSize ? 1 : 0) ;
 
 	Debug_Printf(_T("CXCFileDataBuffer::Free() free_page_count=%d remain=%d pBuf=%p nSize=%d"),nPageCount,m_nRefNum-m_nRefPageCount, pBuf, nSize) ;
 
 	{
 		CptAutoLock lcok(&m_Lock) ;
+
+#ifdef _DEBUG
+		//_ASSERT(!m_AllocSizeList.empty()) ;
+
+		//int nTotal = 0 ;
+		//int nPopCount = 0 ;
+
+		//while(nTotal<nPageCount)
+		//{
+		//	_ASSERT(!m_AllocSizeList.empty()) ;
+		//	nTotal += m_AllocSizeList.front() ;
+		//	m_AllocSizeList.pop_front() ;
+		//	++nPopCount ;
+		//}
+		//
+
+		//{
+		//	_ASSERT(nTotal==nPageCount) ;
+		//}
+
+#endif
+		//if(m_nRefPageCount==m_nRefNum)
+		//{// 当页面引用数和所有页面数目相当时，则说明缓冲区而全部被使用
+//			this->CheckAndTriggerEvent(WFET_WaitForBufNotFull) ;
+		//}
+
+#ifdef _DEBUG
+		// 检测分配ID是否连续，不连续则说明有问题
+		{
+			std::set<int> tem_set ;
+
+			for(int i=0;i<m_nRefNum;++i)
+			{
+				if(m_pRefCountBuf[i]>0)
+				{
+					if(tem_set.find(m_pRefCountBuf[i])!=tem_set.end())
+					{
+						tem_set.insert(m_pRefCountBuf[i]) ;
+					}
+				}
+			}
+
+			if(tem_set.size()>1)
+			{
+				int nPre = 0 ;
+				std::set<int>::iterator it = tem_set.begin() ;
+
+				for(;it!=tem_set.end();++it)
+				{
+					if(nPre>0)
+					{
+						_ASSERT(nPre==(*it)-1) ;
+					}
+					nPre = (*it) ;
+				}
+			}
+		}
+#endif
+
 		for(int i=0;i<nPageCount;++i)
 		{
 			_ASSERT(m_pRefCountBuf[nIndex+i]>0) ;
+
 			if(--m_pRefCountBuf[nIndex+i]==0)
 			{
 				Debug_Printf(_T("free page index=%d "), nIndex + i);
 				--m_nRefPageCount ;
+
 #ifdef _DEBUG
 				_ASSERT(m_pAllocIDRecordBuf[nIndex+i]>0) ;
 				m_nLastFreeID = m_pAllocIDRecordBuf[nIndex+i] ;
@@ -265,23 +392,67 @@ void CXCFileDataBuffer::Free(void* pBuf,int nSize)
 #endif
 			}
 		}
+
+#if _DEBUG
+		/**
+		for(int i=0;i<m_nRefNum;++i)
+		{
+			if(!(m_pAllocIDRecordBuf[i]==0 || m_pAllocIDRecordBuf[i]>m_nLastFreeID)) 
+			{
+				this->SaveAllocIDRecored() ;
+				_ASSERT(FALSE) ;
+			}
+		}
+		/**/
+#endif
+
+#ifdef _DEBUG
+		/**
+		_ASSERT(m_nLastFreePageIndex==nIndex) ;
+
+		m_nLastFreePageIndex += nPageCount ;
+
+		if(m_nLastFreePageIndex==m_nRefNum)
+		{
+			m_nLastFreePageIndex = 0 ;
+		}
+		/**/
+
+		//this->CheckBufAlloc() ;
+#endif
+
 		_ASSERT(!(m_nRefPageCount<0 || m_nRefPageCount>m_nRefNum)) ;
+
+		//if(m_nRefPageCount==0)
+		{// 当所有的页面都不被引用着，那么这个时候缓冲区为空
+//			this->CheckAndTriggerEvent(WFET_WaitForBufEmpty) ;
+		}
+
 		_ASSERTE( _CrtCheckMemory() );
 	}
 
 #ifdef COMPILE_TEST_PERFORMANCE
 	CptPerformanceCalcator::GetInstance()->EndCalAndSave(dw,10) ;
 #endif
+	
 }
+
 
 void* CXCFileDataBuffer::Allocate(BYTE nRefCount,int nSize)
 {
+	//Debug_Printf(_T("CXCFileDataBuffer::Allocate() begin")) ;
+
 	_ASSERT(nSize<=m_nChunkSize) ;
+
+	// 计算出需求的缓存空间占用多少个 "页面"
 	const int nPageCount = nSize/m_nPageSize + (nSize%m_nPageSize ? 1 : 0) ;
-	CptAutoLock lcok(&m_Lock) ;
+
+	CptAutoLock lcok(&m_Lock) ;	
+	
+	//Debug_Printf(_T("CXCFileDataBuffer::Allocate() used=%d remain=%d request=%d"),m_nRefPageCount,m_nRefNum-m_nRefPageCount,nPageCount) ;
 
 	if(m_nRefNum-m_nRefPageCount<nPageCount)
-	{
+	{// 如果剩余页面数量不够分配
 		return NULL ;
 	}
 
@@ -290,34 +461,56 @@ void* CXCFileDataBuffer::Allocate(BYTE nRefCount,int nSize)
 #endif
 
 	while(m_nCurAllocIndex<m_nRefNum && m_pRefCountBuf[m_nCurAllocIndex]>0)
-	{
+	{// 找出下一个干净的页面的起始位置
+		//_ASSERT(false) ;
 		++m_nCurAllocIndex ;
 	}
 
-	if(m_nCurAllocIndex+nPageCount>m_nRefNum)
-	{
-		m_nCurAllocIndex = 0 ;
-		if(m_pRefCountBuf[m_nCurAllocIndex]>0)
+	{// 判断是否有足够的干净页面可供使用,若没有,则返回NULL
+		if(m_nCurAllocIndex+nPageCount>m_nRefNum)
 		{
-#ifdef COMPILE_TEST_PERFORMANCE
-			CptPerformanceCalcator::GetInstance()->EndCalAndSave(dw,9) ;
-#endif
-			return NULL ;
-		}
-	}
+			m_nCurAllocIndex = 0 ;
+			if(m_pRefCountBuf[m_nCurAllocIndex]>0)
+			{
 
-	for(int i=1;i<nPageCount;++i)
-	{
-		if(m_pRefCountBuf[m_nCurAllocIndex+i])
-		{
 #ifdef COMPILE_TEST_PERFORMANCE
-			CptPerformanceCalcator::GetInstance()->EndCalAndSave(dw,9) ;
+				CptPerformanceCalcator::GetInstance()->EndCalAndSave(dw,9) ;
 #endif
-			return NULL ;
+				return NULL ;
+			}
+		}
+
+		for(int i=1;i<nPageCount;++i)
+		{
+			if(m_pRefCountBuf[m_nCurAllocIndex+i])
+			{
+#ifdef _DEBUG
+				//Debug_Printf(_T("CXCFileDataBuffer::Allocate() used=%d remain=%d request=%d m_nCurAllocIndex=%d"), m_nRefPageCount, m_nRefNum - m_nRefPageCount, nPageCount, m_nCurAllocIndex);
+				Debug_Printf(_T("CXCFileDataBuffer::Allocate() 5 i=%d nPageCount=%d m_pRefCountBuf[m_nCurAllocIndex+i]=%d m_pRefCountBuf[m_nCurAllocIndex+i+1]=%d m_nCurAllocIndex=%d m_nRefNum=%d m_nRefPageCount=%d m_nIDCount=%d"),
+					i,nPageCount,m_pRefCountBuf[m_nCurAllocIndex+i], m_pRefCountBuf[m_nCurAllocIndex + i + 1],m_nCurAllocIndex,m_nRefNum,m_nRefPageCount,m_nIDCount) ;
+#endif
+				
+#ifdef COMPILE_TEST_PERFORMANCE
+				CptPerformanceCalcator::GetInstance()->EndCalAndSave(dw,9) ;
+#endif
+
+				return NULL ;
+			}
 		}
 	}
 
 	void* pRet = m_pBlockBuf + (m_nCurAllocIndex * m_nPageSize);
+
+	//if(m_nRefPageCount==0)
+	//{
+//		this->CheckAndTriggerEvent(WFET_WaitForBufNotEmpty) ;
+	//}
+	
+	// 把将要分配出去的页面相应的引用计数赋值
+	//for(int i=m_nCurAllocIndex;i<nPageCount+m_nCurAllocIndex;++i)
+	//{
+	//	m_pRefCountBuf[i] = nRefCount ;
+	//}
 #ifdef _DEBUG
 	++m_nIDCount ;
 	for(int i=0;i<nPageCount;++i)
@@ -325,17 +518,61 @@ void* CXCFileDataBuffer::Allocate(BYTE nRefCount,int nSize)
 		m_pAllocIDRecordBuf[i+m_nCurAllocIndex] = m_nIDCount ;
 	}
 #endif
+
 	::memset(m_pRefCountBuf+m_nCurAllocIndex,nRefCount,nPageCount) ;
+
 	m_nRefPageCount += nPageCount ;
+
 	Debug_Printf(_T("alloc page. cur_alloc=%d  total_alloc=%d pBuf=%p nSize=%d"),nPageCount,m_nRefPageCount, pRet, nSize) ;
+
 	_ASSERT(!(m_nRefPageCount<0 || m_nRefPageCount>m_nRefNum)) ;
+
+	//if(m_nRefPageCount==m_nRefNum)
+	//{
+		//this->CheckAndTriggerEvent(WFET_WaitForBufFull) ;
+	//}
+
 	m_nCurAllocIndex += nPageCount ;
+
+#ifdef _DEBUG
+	//this->CheckBufAlloc() ;
+#endif
+
 	_ASSERTE( _CrtCheckMemory( ) );
+
+	//_ASSERT(nPageCount<=4096 || nPageCount==m_nRefNum) ;
+
+#ifdef _DEBUG	
+	//m_AllocSizeList.push_back(nPageCount) ;
+#endif
+
 #ifdef COMPILE_TEST_PERFORMANCE
 	CptPerformanceCalcator::GetInstance()->EndCalAndSave(dw,9) ;
 #endif
+
 	return pRet ;
 }
+
+
+//bool CXCFileDataBuffer::CheckAndTriggerEvent(EWaitForEventType wfet) 
+//{
+//	if(!m_BufEvent[(int)wfet].empty())
+//	{// 若有注册了缓冲区为空的事件
+//
+//		pt_STL_list(HANDLE)::iterator it = m_BufEvent[(int)wfet].begin() ;
+//
+//		for(;it!=m_BufEvent[(int)wfet].end();++it)
+//		{
+//			::SetEvent((*it)) ;
+//		}
+//
+//		m_BufEvent[(int)wfet].clear() ;
+//
+//		return true ;
+//	}
+//
+//	return false ;
+//}
 
 int CXCFileDataBuffer::GetPageSize() const 
 {
