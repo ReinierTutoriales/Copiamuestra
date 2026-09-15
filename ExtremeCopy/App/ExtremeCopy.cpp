@@ -23,6 +23,40 @@ https://opensource.org/licenses/Apache-2.0
 
 #pragma comment(lib,"comctl32.lib")
 
+namespace
+{
+void EnableModernDpiAwareness()
+{
+	// Resolve dynamically so the existing minimum-Windows contract is not changed.
+	HMODULE hUser32 = ::GetModuleHandle(_T("user32.dll")) ;
+	if(hUser32!=NULL)
+	{
+		typedef BOOL (WINAPI *SetProcessDpiAwarenessContextFn)(HANDLE) ;
+		SetProcessDpiAwarenessContextFn pSetProcessDpiAwarenessContext =
+			reinterpret_cast<SetProcessDpiAwarenessContextFn>(::GetProcAddress(hUser32,"SetProcessDpiAwarenessContext")) ;
+
+		if(pSetProcessDpiAwarenessContext!=NULL)
+		{
+			// DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 == (HANDLE)-4.
+			if(pSetProcessDpiAwarenessContext(reinterpret_cast<HANDLE>(-4)))
+				return ;
+		}
+	}
+
+	// Vista/7-era fallback, also resolved dynamically for legacy compatibility.
+	HMODULE hShcore = ::LoadLibrary(_T("Shcore.dll")) ;
+	if(hShcore!=NULL)
+	{
+		typedef HRESULT (WINAPI *SetProcessDpiAwarenessFn)(int) ;
+		SetProcessDpiAwarenessFn pSetProcessDpiAwareness =
+			reinterpret_cast<SetProcessDpiAwarenessFn>(::GetProcAddress(hShcore,"SetProcessDpiAwareness")) ;
+		if(pSetProcessDpiAwareness!=NULL)
+			pSetProcessDpiAwareness(2) ; // PROCESS_PER_MONITOR_DPI_AWARE
+		::FreeLibrary(hShcore) ;
+	}
+}
+}
+
 /**
 void WriteToFile(const SXCCopyTaskInfo& sti)
 {
@@ -121,21 +155,22 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 					   LPTSTR    lpCmdLine,
 					   int       nCmdShow)
 {
+	EnableModernDpiAwareness() ;
 	::SetUnhandledExceptionFilter(XCReportBug) ;
 
 	{
 		SConfigData*	pConfigData = new SConfigData();
 
-		//¶ÁÈ¡ÅäÖÃ
+		//è¯»å–é…ç½®
 		CXCConfiguration::GetInstance()->LoadConfigDataFromFile(*pConfigData) ;
 
 		if(::LoadXCResource(pConfigData))
-		{// ¼ÓÔØÓïÑÔ×ÊÔ´
+		{// åŠ è½½è¯­è¨€èµ„æº
 			
 			SXCCopyTaskInfo task ;
 			CptString strError ;
 
-			//// Ä¬ÈÏÊÇÊ¹ÓÃ±¾µØiniÎÄ¼þµÄ rich copy selection ÉèÖÃ
+			//// é»˜è®¤æ˜¯ä½¿ç”¨æœ¬åœ°iniæ–‡ä»¶çš„ rich copy selection è®¾ç½®
 			CXCConfiguration::GetInstance()->LoadConfigShareFromFile(task.ConfigShare) ;
 
 			if(CXCCommandLine::ParseCmdLine2TaskInfo(lpCmdLine,task,strError) )
@@ -180,47 +215,15 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 					::XCRunModeXtremeTaskDlg(task,*pConfigData) ;
 					break ;
 
-				case SXCCopyTaskInfo::XCMD_CheckUpdate:
-					::XCRunCheckAndUpdate(task,*pConfigData) ;
+				case SXCCopyTaskInfo::XCMD_VerifyResult:
+					::XCRunModeVerifyResult(task) ;
 					break ;
-
-				default:
-					break ;
-
 				}
-			}
-			else
-			{// ÃüÁîÐÐ½âÎöÊ§°Ü
-				CptString strErrorTitle = ::CptMultipleLanguage::GetInstance()->GetString(IDS_TITLE_ERROR) ;
-				CptString strCmdLineError = ::CptMultipleLanguage::GetInstance()->GetString(IDS_CMDLN_ERROR_CMDLNERROR) ;
-
-				CptString strTxt = strCmdLineError + strError + _T("\r\n");
-
-				CptMessageBox::ShowMessage(NULL,strTxt,strErrorTitle,CptMessageBox::Button_OK) ;
 			}
 		}
 
-		CptMultipleLanguage::Release() ;
-		CXCConfiguration::Release() ;
-
-		SAFE_DELETE_MEMORY(pConfigData) ;
+		delete pConfigData ;
 	}
 
-	//Release_Printf(_T("")) ;
-	//		_CrtMemState cms2 ;
-	//_CrtMemCheckpoint(&cms2) ;
-
-	//_CrtMemState cms3 ;
-
-	//if(_CrtMemDifference(&cms3,&cms1,&cms2))
-	//{
-	//	Debug_Printf(_T("There is memory leak")) ;
-	//}
-	//else
-	//{
-	//	Debug_Printf(_T("There is no memory leak")) ;
-	//}
-
-
-	return 0 ;
+	return 0;
 }
