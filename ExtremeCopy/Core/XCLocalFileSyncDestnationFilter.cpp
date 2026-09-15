@@ -62,9 +62,7 @@ int CXCLocalFileSyncDestnationFilter::WriteFileData(SDataPack_FileData& fd)
 		return ErrorHandlingFlag_Exit ;
 	}
 
-	// ¾ÍËãÊÇ±»Å×ÆúµÄÎÄ¼þ£¬ÆäÒ²»áÔÚ m_FileInfoList Àï
 	_ASSERT(!m_FileInfoList.empty()) ;
-
 
 	if(m_CurFileIterator==m_FileInfoList.end())
 	{
@@ -81,44 +79,37 @@ int CXCLocalFileSyncDestnationFilter::WriteFileData(SDataPack_FileData& fd)
 	_ASSERT((*m_CurFileIterator).pSfi->uFileID==fd.uFileID) ;
 	_ASSERT(m_CurFileIterator!=m_FileInfoList.end()) ;
 
-
 	if((*m_CurFileIterator).pSfi->IsDiscard())
-	{// ÊÇ´æÔÚÕâ¸ö¿ÉÄÜµÄ£¬¼´ÒªÅ×ÆúµÄÎÄ¼þÊý¾Ý»¹Ã»µ½´ïdestination filter¡£
-		//Èô´ËÊ±reading Òì³££¬Êý¾ÝÁ÷½«¼ÌÐøÁ÷Ïòdestination filter£¬
-		// µ«ÔÚdestination²»´´½¨ÎÄ¼þ£¬µ«¸ÃÎÄ¼þÊý¾Ý¿éÒÀÈ»Á÷Èë destination filter²¢ÊÍ·Å
-		// Çë²Î¼û ¡°ExtremeCopy Ô­Àí.docx¡± ¡®ÎÄ¼þÅ×Æú²¿·Ö¡¯Çé¿ö2ÏÂµÄ×´¿ö2
+	{
 		_ASSERT(fd.pData!=NULL) ;
 		_ASSERT(fd.uFileID>0) ;
-		//_ASSERT(fd.pSfi!=NULL && fd.pSfi->bDiscard==true) ;
-		//--m_CurFileIterator ;
 		m_pFileDataBuf->Free(fd.pData,fd.nBufSize) ;
-
 		return 0 ;
 	}
 
 	_ASSERT(!(*m_CurFileIterator).pSfi->IsDiscard()) ;
 
+	DWORD nSize = (DWORD)fd.nDataSize ;
+	if((*m_CurFileIterator).bNoBuf)
+	{
+		nSize = (DWORD)ALIGN_SIZE_UP(fd.nDataSize,m_StorageInfo.nSectorSize) ;
+	}
+
+	DWORD nWrittenTotal = 0 ;
+	DWORD nSystemError = ERROR_SUCCESS ;
+
+EXCEPTION_RETRY_WRITEDATA:
+	while(nWrittenTotal<nSize)
 	{
 		DWORD dwWrite = 0 ;
-
-		int nSize = 0 ;
-
-		if((*m_CurFileIterator).bNoBuf)
-		{//²»Ê¹ÓÃÏµÍ³»º³å,Ôò½øÐÐÉÈÇø´óÐ¡¶ÔÆë
-			nSize = ALIGN_SIZE_UP(fd.nDataSize,m_StorageInfo.nSectorSize) ;
-		}
-		else
-		{
-			nSize = fd.nDataSize ;
-		}
-
-EXCEPTION_RETRY_WRITEDATA:// ÖØÊÔ£¨Ð´ÎÄ¼þ£©
+		DWORD nWriteSize = nSize-nWrittenTotal ;
+		BYTE* pWriteData = ((BYTE*)fd.pData)+nWrittenTotal ;
 
 #ifdef COMPILE_TEST_PERFORMANCE
 		DWORD dw = CptPerformanceCalcator::GetInstance()->BeginCal() ;
 #endif
 
-		BOOL b = ::WriteFile((*m_CurFileIterator).hFile,fd.pData,nSize,&dwWrite,NULL) ;
+		BOOL b = ::WriteFile((*m_CurFileIterator).hFile,pWriteData,nWriteSize,&dwWrite,NULL) ;
 
 #ifdef COMPILE_TEST_PERFORMANCE
 		CptPerformanceCalcator::GetInstance()->EndCalAndSave(dw,2) ;
@@ -128,90 +119,113 @@ EXCEPTION_RETRY_WRITEDATA:// ÖØÊÔ£¨Ð´ÎÄ¼þ£©
 		{
 			return ErrorHandlingFlag_Exit ;
 		}
-		
-		if(b)
+
+		if(!b)
 		{
-			m_pFileDataBuf->Free(fd.pData,fd.nBufSize) ;
+			nSystemError = ::GetLastError() ;
+			break ;
+		}
 
-			_ASSERT((*m_CurFileIterator).uRemainSize>=dwWrite) ;
+		if(dwWrite==0)
+		{
+			nSystemError = ERROR_WRITE_FAULT ;
+			break ;
+		}
 
-			(*m_CurFileIterator).uRemainSize -= dwWrite ;
+		nWrittenTotal += dwWrite ;
 
-			if(m_pEvent!=NULL && this->CanCallbackFileInfo())
-			{// ÍùÉÏ»Øµ÷Êý¾Ý
-				SFileDataOccuredInfo fdoi ;
-
-				fdoi.bReadOrWrite = false ;
-				fdoi.nDataSize = dwWrite ;
-				fdoi.uFileID = (*m_CurFileIterator).pSfi->uFileID ;//(*m_CurFileIterator).uFileID ;
-				//fdoi.strFileName = (*m_CurFileIterator).strFileName ;
-
-				m_pEvent->XCOperation_FileDataOccured(fdoi) ;
+		if((*m_CurFileIterator).bNoBuf && nWrittenTotal<nSize)
+		{
+			LARGE_INTEGER liMove ;
+			liMove.QuadPart = -(LONGLONG)nWrittenTotal ;
+			if(!::SetFilePointerEx((*m_CurFileIterator).hFile,liMove,NULL,FILE_CURRENT))
+			{
+				m_pFileDataBuf->Free(fd.pData,fd.nBufSize) ;
+				*this->m_pRunningState = CFS_ReadyStop ;
+				return ErrorHandlingFlag_Exit ;
 			}
 
+			nWrittenTotal = 0 ;
+			nSystemError = ERROR_WRITE_FAULT ;
+			break ;
+		}
+	}
 
-			if((*m_CurFileIterator).uRemainSize==0)
+	if(nWrittenTotal==nSize)
+	{
+		m_pFileDataBuf->Free(fd.pData,fd.nBufSize) ;
+
+		_ASSERT((*m_CurFileIterator).uRemainSize>=nSize) ;
+		(*m_CurFileIterator).uRemainSize -= nSize ;
+
+		if(m_pEvent!=NULL && this->CanCallbackFileInfo())
+		{
+			SFileDataOccuredInfo fdoi ;
+			fdoi.bReadOrWrite = false ;
+			fdoi.nDataSize = fd.nDataSize ;
+			fdoi.uFileID = (*m_CurFileIterator).pSfi->uFileID ;
+			m_pEvent->XCOperation_FileDataOccured(fdoi) ;
+		}
+
+		if((*m_CurFileIterator).uRemainSize==0)
+		{
+			while((++m_CurFileIterator)!=m_FileInfoList.end() && (*m_CurFileIterator).pSfi->nFileSize==0)
 			{
-				while((++m_CurFileIterator)!=m_FileInfoList.end() && (*m_CurFileIterator).pSfi->nFileSize==0)
-				{
-					NULL ;
-				}
+				NULL ;
+			}
+		}
+	}
+	else
+	{
+		Debug_Printf(_T("CXCLocalFileDestnationFilter::WriteFileData() failed")) ;
 
+		if(m_pEvent!=NULL)
+		{
+			SXCExceptionInfo ei ;
+			ei.uFileID =(*m_CurFileIterator).pSfi->uFileID ;
+			ei.ErrorCode.nSystemError = nSystemError ;
+			ei.SupportType = ErrorHandlingFlag_RetryIgnoreCancel ;
+			ei.strDstFile = (*m_CurFileIterator).strFileName ;
+			ei.strSrcFile = (*m_CurFileIterator).pSfi->strSourceFile ;
+
+			ErrorHandlingResult result = m_pEvent->XCOperation_CopyExcetption(ei) ;
+
+			switch(result)
+			{
+			case ErrorHandlingFlag_Ignore:
+				{
+					::CloseHandle((*m_CurFileIterator).hFile) ;
+					(*m_CurFileIterator).hFile = INVALID_HANDLE_VALUE ;
+					::DeleteFile((*m_CurFileIterator).strFileName) ;
+					(*m_CurFileIterator).pSfi->SetDiscard(true) ;
+					m_pFileDataBuf->Free(fd.pData,fd.nBufSize) ;
+
+					m_pEvent->XCOperation_FileDiscard((*m_CurFileIterator).pSfi,(*m_CurFileIterator).uRemainSize) ;
+					++m_CurFileIterator ;
+					m_pEvent->XCOperation_RecordError(ei) ;
+					nRet = ErrorHandlingFlag_Ignore ;
+				}
+				break ;
+
+			case ErrorHandlingFlag_Retry:
+				goto EXCEPTION_RETRY_WRITEDATA ;
+
+			default:
+			case ErrorHandlingFlag_Exit:
+				::CloseHandle((*m_CurFileIterator).hFile) ;
+				(*m_CurFileIterator).hFile = INVALID_HANDLE_VALUE ;
+				::DeleteFile((*m_CurFileIterator).strFileName) ;
+				m_pFileDataBuf->Free(fd.pData,fd.nBufSize) ;
+				*this->m_pRunningState = CFS_ReadyStop ;
+				return ErrorHandlingFlag_Exit ;
 			}
 		}
 		else
 		{
-			Debug_Printf(_T("CXCLocalFileDestnationFilter::WriteFileData() failed")) ;
-
-			if(m_pEvent!=NULL)
-			{
-				SXCExceptionInfo ei ;
-				ei.uFileID =(*m_CurFileIterator).pSfi->uFileID ;
-				ei.ErrorCode.nSystemError = ::GetLastError() ;
-				ei.SupportType = ErrorHandlingFlag_RetryIgnoreCancel ;
-				ei.strDstFile = (*m_CurFileIterator).strFileName ;
-				ei.strSrcFile = (*m_CurFileIterator).pSfi->strSourceFile ;
-
-				ErrorHandlingResult result = m_pEvent->XCOperation_CopyExcetption(ei) ;
-
-				switch(result)
-				{
-				case ErrorHandlingFlag_Ignore: // ºöÂÔ
-					{
-						::CloseHandle((*m_CurFileIterator).hFile) ;
-						::DeleteFile((*m_CurFileIterator).strFileName) ;
-						//(*m_CurFileIterator).pSfi->bDiscard = true ;
-						(*m_CurFileIterator).pSfi->SetDiscard(true) ;
-						
-						if(m_pEvent!=NULL)
-						{
-							m_pEvent->XCOperation_FileDiscard((*m_CurFileIterator).pSfi,(*m_CurFileIterator).uRemainSize) ;
-						}
-
-						++m_CurFileIterator ;
-
-						m_pEvent->XCOperation_RecordError(ei) ; // Èç¹ûºöÂÔÔò°ÑËü¼ÇÂ¼ÏÂÀ´
-
-						nRet = ErrorHandlingFlag_Ignore ;
-					}
-					break ;
-
-				case ErrorHandlingFlag_Retry: // ÖØÊÔ£¨Ð´ÎÄ¼þ£©
-					goto EXCEPTION_RETRY_WRITEDATA ;
-
-				default:
-				case ErrorHandlingFlag_Exit: // ÍË³ö
-					::CloseHandle((*m_CurFileIterator).hFile) ;
-					::DeleteFile((*m_CurFileIterator).strFileName) ;
-//					m_FileInfoMap.erase(fd.uFileID) ;
-					m_pFileDataBuf->Free(fd.pData,fd.nBufSize) ;
-					*this->m_pRunningState = CFS_ReadyStop ;
-					return ErrorHandlingFlag_Exit ;
-				}
-			}
+			m_pFileDataBuf->Free(fd.pData,fd.nBufSize) ;
+			*this->m_pRunningState = CFS_ReadyStop ;
+			return ErrorHandlingFlag_Exit ;
 		}
-
-		//Debug_Printf(_T("file id: %u  remain size: %u "),fd.uFileID,dfi.uRemainSize) ;
 	}
 
 	return nRet ;
@@ -221,8 +235,8 @@ void CXCLocalFileSyncDestnationFilter::OnLinkEnded(pt_STL_list(SDataPack_SourceF
 {
 	if(!FileList.empty())
 	{
-		// ÒòÎªÊÇÒì²½´¦Àí£¬µ±LinkEndedÃüÁî·¢³öÊ±£¬¿ÉÄÜÓÐÎÄ¼þÎ´±»È·ÈÏÊÍ·Å£¨ÊÂÊµÉÏ£¬ÃüÁî·¢³öºóÒ»Ë²¼äÒÑÈ·ÈÏÊÍ·ÅÁË£©£¬
-		// ËùÒÔ¾Í»á³öÏÖ FileList ÓÐÎÄ¼þID£¬µ«È´ÒÑÊÍ·ÅÁËµÄÇé¿ö
+		// å› ä¸ºæ˜¯å¼‚æ­¥å¤„ç†ï¼Œå½“LinkEndedå‘½ä»¤å‘å‡ºæ—¶ï¼Œå¯èƒ½æœ‰æ–‡ä»¶æœªè¢«ç¡®è®¤é‡Šæ”¾ï¼ˆäº‹å®žä¸Šï¼Œå‘½ä»¤å‘å‡ºåŽä¸€çž¬é—´å·²ç¡®è®¤é‡Šæ”¾äº†ï¼‰ï¼Œ
+		// æ‰€ä»¥å°±ä¼šå‡ºçŽ° FileList æœ‰æ–‡ä»¶IDï¼Œä½†å´å·²é‡Šæ”¾äº†çš„æƒ…å†µ
 		if(!m_FileInfoList.empty())
 		{
 			this->RoundOffFile(FileList) ;
