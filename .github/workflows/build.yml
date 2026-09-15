@@ -25,15 +25,27 @@ jobs:
         run: |
           msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
 
-      - name: Build English resource DLL x64 Release
-        shell: pwsh
+      - name: Build x64 language resource DLLs
+        shell: cmd
         run: |
-          msbuild ExtremeCopy/App/Language/XCRes_ENU/XCRes_ENU64.vcxproj /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSINSTALL=%%i"
+          call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=amd64 -host_arch=amd64
+          if errorlevel 1 exit /b 1
+          if not exist "ExtremeCopy\App\Build\x64\Release\Language" mkdir "ExtremeCopy\App\Build\x64\Release\Language"
 
-      - name: Build Spanish resource DLL x64 Release
-        shell: pwsh
-        run: |
-          msbuild ExtremeCopy/App/Language/XCRes_ESP/XCRes_ESP64.vcxproj /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+          pushd "ExtremeCopy\App\Language\XCRes_ENU"
+          rc /nologo /d _WIN64 /d _UNICODE /d UNICODE /fo XCRes_ENU.res XCRes_ENU.rc
+          if errorlevel 1 exit /b 1
+          link /nologo /dll /noentry /machine:x64 /out:"..\..\..\Build\x64\Release\Language\XCRes_ENU.dll" XCRes_ENU.res
+          if errorlevel 1 exit /b 1
+          popd
+
+          pushd "ExtremeCopy\App\Language\XCRes_ESP"
+          rc /nologo /d _WIN64 /d _UNICODE /d UNICODE /fo XCRes_ESP.res XCRes_ESP.rc
+          if errorlevel 1 exit /b 1
+          link /nologo /dll /noentry /machine:x64 /out:"..\..\..\Build\x64\Release\Language\XCRes_ESP.dll" XCRes_ESP.res
+          if errorlevel 1 exit /b 1
+          popd
 
       - name: Package release
         shell: pwsh
@@ -41,16 +53,16 @@ jobs:
           $exe = "ExtremeCopy/App/Build/Release/ExtremeCopy.exe"
           if (-not (Test-Path $exe)) { throw "Expected executable was not produced: $exe" }
 
-          $resourceDlls = Get-ChildItem "ExtremeCopy/App/Build/x64/Release/Language" -File -Filter "XCRes_*.dll" -ErrorAction Stop
-          $enu = $resourceDlls | Where-Object { $_.BaseName -eq 'XCRes_ENU' } | Select-Object -First 1
-          $esp = $resourceDlls | Where-Object { $_.BaseName -eq 'XCRes_ESP' } | Select-Object -First 1
-          if (-not $enu) { throw "English resource DLL XCRes_ENU.dll was not produced" }
-          if (-not $esp) { throw "Spanish resource DLL XCRes_ESP.dll was not produced" }
+          $languageDir = "ExtremeCopy/App/Build/x64/Release/Language"
+          $enu = Join-Path $languageDir "XCRes_ENU.dll"
+          $esp = Join-Path $languageDir "XCRes_ESP.dll"
+          if (-not (Test-Path $enu)) { throw "English resource DLL XCRes_ENU.dll was not produced" }
+          if (-not (Test-Path $esp)) { throw "Spanish resource DLL XCRes_ESP.dll was not produced" }
 
           New-Item -ItemType Directory -Force -Path "dist/Language" | Out-Null
           Copy-Item $exe "dist/ExtremeCopy.exe"
-          Copy-Item $enu.FullName "dist/Language/XCRes_ENU.dll"
-          Copy-Item $esp.FullName "dist/Language/XCRes_ESP.dll"
+          Copy-Item $enu "dist/Language/XCRes_ENU.dll"
+          Copy-Item $esp "dist/Language/XCRes_ESP.dll"
 
           $required = @(
             "dist/ExtremeCopy.exe",
