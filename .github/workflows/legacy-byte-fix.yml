@@ -23,10 +23,9 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Apply byte-preserving copy correctness corrections
+      - name: Apply byte-preserving worker shutdown correction
         shell: pwsh
         run: |
-          # Retrigger 2026-09-15: COPY correctness pass.
           function Replace-AsciiExact([string]$path, [string]$oldText, [string]$newText, [int]$expected = 1) {
             $bytes = [System.IO.File]::ReadAllBytes($path)
             $old = [System.Text.Encoding]::ASCII.GetBytes($oldText)
@@ -112,27 +111,11 @@ jobs:
 	}
 '@
           Replace-AsciiExact $async $oldShutdown $newShutdown 2
-
-          $dest = 'ExtremeCopy/Core/XCLocalFileSyncDestnationFilter.cpp'
-          Replace-AsciiExact $dest 'if(b)' 'if(b && dwWrite==(DWORD)nSize)' 1
-          Replace-AsciiExact $dest @'
-		else
-		{
-			Debug_Printf(_T("CXCLocalFileDestnationFilter::WriteFileData() failed")) ;
-'@ @'
-		else
-		{
-			if(b && dwWrite!=(DWORD)nSize)
-				::SetLastError(ERROR_WRITE_FAULT) ;
-			Debug_Printf(_T("CXCLocalFileDestnationFilter::WriteFileData() failed")) ;
-'@ 1
-
           git diff --check
           $changed = @(git diff --name-only)
-          $expectedFiles = @($async, $dest)
-          if (@($changed | Where-Object { $_ -notin $expectedFiles }).Count -ne 0) { throw "Unexpected changed files: $changed" }
+          if ($changed.Count -ne 1 -or $changed[0] -ne $async) { throw "Unexpected changed files: $changed" }
           git diff --stat
-          git diff -- $async $dest
+          git diff -- $async
 
       - name: Build patched x64 Release before commit
         shell: pwsh
@@ -141,12 +124,12 @@ jobs:
           $exe = 'ExtremeCopy/App/Build/Release/ExtremeCopy.exe'
           if (-not (Test-Path $exe)) { throw "Expected executable was not produced: $exe" }
 
-      - name: Commit validated copy correctness corrections
+      - name: Commit validated worker shutdown correction
         shell: pwsh
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp ExtremeCopy/Core/XCLocalFileSyncDestnationFilter.cpp
-          git diff --cached --quiet && throw 'Expected copy correctness corrections were not staged.'
-          git commit -m 'fix: harden copy write and worker shutdown correctness'
+          git add -- ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp
+          git diff --cached --quiet && throw 'Expected worker shutdown correction was not staged.'
+          git commit -m 'fix: keep async worker events alive until thread exit'
           git push origin HEAD:main
