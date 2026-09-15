@@ -38,7 +38,7 @@ jobs:
               }
               if ($ok) { $matches += $i; $i += $old.Length - 1 }
             }
-            if ($matches.Count -ne $expected) { throw "$path: expected $expected matches for [$oldText], found $($matches.Count)" }
+            if ($matches.Count -ne $expected) { throw "${path}: expected $expected matches for [$oldText], found $($matches.Count)" }
             for ($m = $matches.Count - 1; $m -ge 0; $m--) {
               $pos = $matches[$m]
               $out = New-Object byte[] ($bytes.Length - $old.Length + $new.Length)
@@ -52,21 +52,15 @@ jobs:
             [System.IO.File]::WriteAllBytes($path, $bytes)
           }
 
-          # WNDPROC storage/API must be pointer-sized on x64.
           Replace-AsciiExact 'ExtremeCopy/Common/WndShadow.h' 'LONG m_OriParentProc;' 'LONG_PTR m_OriParentProc;'
           Replace-AsciiExact 'ExtremeCopy/Common/WndShadow.cpp' 'm_OriParentProc = GetWindowLong(hParentWnd, GWLP_WNDPROC);' 'm_OriParentProc = GetWindowLongPtr(hParentWnd, GWLP_WNDPROC);'
           Replace-AsciiExact 'ExtremeCopy/Common/WndShadow.cpp' 'SetWindowLong(hParentWnd, GWLP_WNDPROC, (LONG)ParentProc);' 'SetWindowLongPtr(hParentWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ParentProc));'
-
           Replace-AsciiExact 'ExtremeCopy/App/UI/CptFileDialog.cpp' 'LONG g_lOriWndProc = NULL;' 'LONG_PTR g_lOriWndProc = 0;'
           Replace-AsciiExact 'ExtremeCopy/App/UI/CptFileDialog.cpp' 'return ((WNDPROC)g_lOriWndProc)( hwnd, uMsg, wParam ,lParam );' 'return ::CallWindowProc(reinterpret_cast<WNDPROC>(g_lOriWndProc), hwnd, uMsg, wParam, lParam);'
           Replace-AsciiExact 'ExtremeCopy/App/UI/CptFileDialog.cpp' 'g_lOriWndProc  = ::SetWindowLong( ::GetParent( hdlg ), GWLP_WNDPROC , (LONG)_WndProc );' 'g_lOriWndProc = ::SetWindowLongPtr(::GetParent(hdlg), GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(_WndProc));'
-
-          # CptDialog::SendMessage must preserve pointer-sized LRESULT values.
           Replace-AsciiExact 'ExtremeCopy/App/UI/ptDialog.h' 'long SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam) ;' 'LRESULT SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam) ;'
           Replace-AsciiExact 'ExtremeCopy/App/UI/ptDialog.cpp' 'long CptDialog::SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam)' 'LRESULT CptDialog::SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam)'
           Replace-AsciiExact 'ExtremeCopy/App/UI/ptDialog.cpp' 'return (long)::SendMessage(m_hWnd,uMsg,wParam,lParam) ;' 'return ::SendMessage(m_hWnd,uMsg,wParam,lParam) ;'
-
-          # Win32 IDs/handles and ShellExecute return values are pointer-sized.
           Replace-AsciiExact 'ExtremeCopy/App/UI/Hyperlink.cpp' '(HMENU)phs->ctlID' 'reinterpret_cast<HMENU>(static_cast<INT_PTR>(phs->ctlID))'
           Replace-AsciiExact 'ExtremeCopy/App/UI/ptWinToolTip.cpp' 'ti.uId    =(UINT)GetDlgItem(hWnd,id);' 'ti.uId    = reinterpret_cast<UINT_PTR>(GetDlgItem(hWnd,id));'
           Replace-AsciiExact 'ExtremeCopy/App/UI/ptWinToolTip.cpp' 'ti.uId    =(UINT)hControlWnd;' 'ti.uId    = reinterpret_cast<UINT_PTR>(hControlWnd);'
@@ -77,8 +71,6 @@ jobs:
           Replace-AsciiExact 'ExtremeCopy/App/XCTransApp.cpp' 'm_FailedFileMsgQue.PostMsg((void*)(OldFfi.nIndex+1)) ;' 'm_FailedFileMsgQue.PostMsg(reinterpret_cast<void*>(static_cast<INT_PTR>(OldFfi.nIndex + 1))) ;'
           Replace-AsciiExact 'ExtremeCopy/App/XCTransApp.cpp' 'm_FailedFileMsgQue.RemoveMsg((void*)(OldFfi.nIndex+1)) ;' 'm_FailedFileMsgQue.RemoveMsg(reinterpret_cast<void*>(static_cast<INT_PTR>(OldFfi.nIndex + 1))) ;'
           Replace-AsciiExact 'ExtremeCopy/App/XCTransApp.cpp' 'int nIndex = (int)p - 1 ;' 'int nIndex = static_cast<int>(reinterpret_cast<INT_PTR>(p)) - 1 ;'
-
-          # Correct VirtualFree contract: MEM_RELEASE requires dwSize == 0.
           Replace-AsciiExact 'ExtremeCopy/Core/XCFileDataBuffer.cpp' '::VirtualFree(m_pBlockBuf,m_nChunkSize,MEM_RELEASE) ;' '::VirtualFree(m_pBlockBuf,0,MEM_RELEASE) ;'
 
           git diff --check
