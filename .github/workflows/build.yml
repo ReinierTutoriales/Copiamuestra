@@ -23,4 +23,4 @@ jobs:
       - name: Build ExtremeCopy x64 Release
         shell: pwsh
         run: |
-          msbuild ExtremeCopy.sln /m /restore /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
+          msbuild ExtremeCopy.sln /m /restore /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /verbosity:minimal
