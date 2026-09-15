@@ -298,6 +298,7 @@ int CXCAsyncFileDataTransFilter::ProcessLinkedEnd(SDataPack_FileOperationComplet
 					pFoc->CompletedFileInfoList.erase(it2) ;
 					break ;
 				}
+			}
 		}
 
 		it2 = pFoc->CompletedFileInfoList.begin() ;

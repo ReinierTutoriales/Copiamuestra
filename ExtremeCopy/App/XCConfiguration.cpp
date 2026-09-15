@@ -129,7 +129,7 @@ void CXCConfiguration::LoadConfigDataFromFile(SConfigData& config,HMODULE hModul
 
 	config.strSoundFile = szFileName ;
 
-	// Ä¬ÈÏ±¾µØÓïÑÔ
+	// é»˜è®¤æœ¬åœ°è¯­è¨€
 	TCHAR szDefaultLangDLL[32] = { 0 };
 	LCID lcid = GetUserDefaultUILanguage();
 	if (lcid == 0x0804)
@@ -158,7 +158,12 @@ void CXCConfiguration::LoadConfigDataFromFile(SConfigData& config,HMODULE hModul
 
 	config.bAutoUpdate = ::GetPrivateProfileInt(pSectionName,_T("AutoUpdate"),1,szIniFile) ? true : false ;
 	config.bAutoQueueMultipleTask = ::GetPrivateProfileInt(pSectionName,_T("AutoQueueMultipleTasks"),1,szIniFile) ? true : false ;
-	config.uLastCheckUpdateTime = (time_t)::GetPrivateProfileInt(pSectionName,_T("LastCheckTime"),0,szIniFile) ;
+
+	szFileName[0] = 0 ;
+	::GetPrivateProfileString(pSectionName,_T("LastCheckTime"),_T("0"),szFileName,sizeof(szFileName)/sizeof(TCHAR),szIniFile) ;
+	TCHAR* pLastCheckEnd = NULL ;
+	const __int64 nLastCheckTime = ::_tcstoi64(szFileName,&pLastCheckEnd,10) ;
+	config.uLastCheckUpdateTime = (pLastCheckEnd!=szFileName && *pLastCheckEnd==0 && nLastCheckTime>=0) ? (time_t)nLastCheckTime : (time_t)0 ;
 
 	int nFileBufSize = ::GetPrivateProfileInt(pSectionName,_T("CopyBufSize"),32,szIniFile) ;
 

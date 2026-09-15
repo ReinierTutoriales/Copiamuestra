@@ -40,7 +40,7 @@ void CXCDestinationFilter::ResetCanCallbackMark()
 	m_sDstFilterIDCounter = 0 ;
 }
 
-// ÒòÎª¿ÉÒÔÓĞ¶àÂ·µÄ destination filter Í¬Ê±Ğ´Èë£¬¶øÖ»ÓĞµÚÒ»¸ö²Å¾ßÓĞ»Øµ÷Êı¾İµÄ×Ê¸ñ
+// å› ä¸ºå¯ä»¥æœ‰å¤šè·¯çš„ destination filter åŒæ—¶å†™å…¥ï¼Œè€Œåªæœ‰ç¬¬ä¸€ä¸ªæ‰å…·æœ‰å›è°ƒæ•°æ®çš„èµ„æ ¼
 bool CXCDestinationFilter::CanCallbackFileInfo() const 
 {
 	return (m_nDstFilterID==1) ;
@@ -140,7 +140,7 @@ void CXCLocalFileDestnationFilter::OnStop()
 		::CancelIo(m_hCurFileHandle) ;
 	}
 
-	// °Ñ»¹Ã»ÓĞÍêÈ«Ğ´Èë´ÅÅÌµÄÎÄ¼şÉ¾³ıµô
+	// æŠŠè¿˜æ²¡æœ‰å®Œå…¨å†™å…¥ç£ç›˜çš„æ–‡ä»¶åˆ é™¤æ‰
 	bool bDelete = false ;
 	bool bOverCurIt = false ;
 
@@ -150,8 +150,8 @@ void CXCLocalFileDestnationFilter::OnStop()
 	{
 		bDelete = true ;
 
-		// ÔİÎ´ÖªÎªÊ²Ã´ÒªÌø¹ı¶Ôµ±Ç°ÎÄ¼şµÄÉ¾³ı
-		// ¹ÊÏÈ°ÑÆäÒÔ¼°ÏÂÃæµÄ bDelete = bOverCurIt ;Ò»Æğ×¢ÊÍ
+		// æš‚æœªçŸ¥ä¸ºä»€ä¹ˆè¦è·³è¿‡å¯¹å½“å‰æ–‡ä»¶çš„åˆ é™¤
+		// æ•…å…ˆæŠŠå…¶ä»¥åŠä¸‹é¢çš„ bDelete = bOverCurIt ;ä¸€èµ·æ³¨é‡Š
 		//if(!bOverCurIt && it==m_CurFileIterator)
 		//{
 		//	bOverCurIt = true ;
@@ -162,22 +162,39 @@ void CXCLocalFileDestnationFilter::OnStop()
 			if((*it).uRemainSize==0 && (*it).bNoBuf )
 			{
 				_ASSERT(!bOverCurIt) ;
-				LARGE_INTEGER liFileSize ;
-				liFileSize.QuadPart = (LONGLONG)(*it).pSfi->nFileSize ;
-				if(::SetFilePointerEx((*it).hFile,liFileSize,NULL,FILE_BEGIN) && ::SetEndOfFile((*it).hFile))
+				const bool bNeedsTruncate = ((*it).pSfi->nFileSize % m_StorageInfo.nSectorSize) != 0 ;
+				if(bNeedsTruncate)
 				{
-					bDelete = false ;
-				}// ÒÑÍê³ÉµÄÎÄ¼ş²»É¾³ı
+					::CloseHandle((*it).hFile) ;
+					(*it).hFile = ::CreateFile((*it).strFileName.c_str(),GENERIC_WRITE,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_SEQUENTIAL_SCAN,NULL) ;
+				}
+
+				if((*it).hFile!=INVALID_HANDLE_VALUE)
+				{
+					if(!bNeedsTruncate)
+					{
+						bDelete = false ;
+					}
+					else
+					{
+						LARGE_INTEGER liFileSize ;
+						liFileSize.QuadPart = (LONGLONG)(*it).pSfi->nFileSize ;
+						bDelete = !(::SetFilePointerEx((*it).hFile,liFileSize,NULL,FILE_BEGIN) && ::SetEndOfFile((*it).hFile)) ;
+					}
+				}
 			}
 
-			::CloseHandle((*it).hFile) ;
-			(*it).hFile = INVALID_HANDLE_VALUE ;
+			if((*it).hFile!=INVALID_HANDLE_VALUE)
+			{
+				::CloseHandle((*it).hFile) ;
+				(*it).hFile = INVALID_HANDLE_VALUE ;
+			}
 
 			//bDelete = bOverCurIt ;
 		}
 		else
 		{
-			// Èç¹ûÎÄ¼şÊÇÔÚ´´½¨Ç°¾ÍÒòÎªÍ¬ÃûµÈÔ­Òò¶ø±»Å×Æú£¬Ôò²»Ó¦×÷É¾³ı
+			// å¦‚æœæ–‡ä»¶æ˜¯åœ¨åˆ›å»ºå‰å°±å› ä¸ºåŒåç­‰åŸå› è€Œè¢«æŠ›å¼ƒï¼Œåˆ™ä¸åº”ä½œåˆ é™¤
 			if((*it).pSfi->IsDiscard() && (*it).uRemainSize==0)
 			{
 				bDelete = false ;
@@ -221,26 +238,26 @@ int CXCLocalFileDestnationFilter::OnCreateXCFile(SDataPack_CreateFileInfo& cfi)
 		{
 			if((*it)==NULL)
 			{
-				this->m_DestURI.Pop() ; // µ¯³ö URI Ä¿Â¼Õ»
+				this->m_DestURI.Pop() ; // å¼¹å‡º URI ç›®å½•æ ˆ
 			}
 			else 
-			{// ÎÄ¼ş
-				bDiscardInSrcOpen = (*it)->IsDiscard() ; //ÒòÎªÔÚ CreateXCFile() ·µ»ØÒ²»áÖÃ bDiscard Îªtrue£¬
-														// ËùÒÔÔÚÕâÀï¾ÍÅĞ¶ÏÊÇ·ñÔÚsource filter´¦ÒÑÊÇÅ×Æú
+			{// æ–‡ä»¶
+				bDiscardInSrcOpen = (*it)->IsDiscard() ; //å› ä¸ºåœ¨ CreateXCFile() è¿”å›ä¹Ÿä¼šç½® bDiscard ä¸ºtrueï¼Œ
+														// æ‰€ä»¥åœ¨è¿™é‡Œå°±åˆ¤æ–­æ˜¯å¦åœ¨source filterå¤„å·²æ˜¯æŠ›å¼ƒ
 
 				nRet = this->CreateXCFile(*(*it),strDstFile) ;
 
 				bFolder = CptGlobal::IsFolder((*it)->dwSourceAttr) ;
 
 				/**
-				// Ôİ²»¿¼ÂÇÎÄ¼ş¼ĞÅ×Æú
+				// æš‚ä¸è€ƒè™‘æ–‡ä»¶å¤¹æŠ›å¼ƒ
 				
 				if(bFolder && cfi.SourceFileInfoVer[i]->bDiscard)
-				{// ÈôÎª±»Å×ÆúµÄÎÄ¼ş¼Ğ,ÔòÔÚ¸ÃÎÄ¼ş¼ĞÄÚµÄËùÓĞÎÄ¼ş¼°×ÓÎÄ¼ş¼Ğ¾ù±»Å×Æú¡£
-					// ÒòÎª¸ÃÎÄ¼ş¼Ğ±»Å×Æú£¬ËùÒÔÔÚCreateXCFile()ÀïÃ»ÓĞ±»ÈëÄ¿Â¼Õ»£¬ËùÒÔÕâÀïÒ²²»ÓÃ³öÄ¿Â¼Õ»
+				{// è‹¥ä¸ºè¢«æŠ›å¼ƒçš„æ–‡ä»¶å¤¹,åˆ™åœ¨è¯¥æ–‡ä»¶å¤¹å†…çš„æ‰€æœ‰æ–‡ä»¶åŠå­æ–‡ä»¶å¤¹å‡è¢«æŠ›å¼ƒã€‚
+					// å› ä¸ºè¯¥æ–‡ä»¶å¤¹è¢«æŠ›å¼ƒï¼Œæ‰€ä»¥åœ¨CreateXCFile()é‡Œæ²¡æœ‰è¢«å…¥ç›®å½•æ ˆï¼Œæ‰€ä»¥è¿™é‡Œä¹Ÿä¸ç”¨å‡ºç›®å½•æ ˆ
 
-					// ½«Æä¼ÇÂ¼ÔÚ±»Å×ÆúµÄÎÄ¼ş¼Ğ»º³åÇø£¬ÒÔ±ã EDC_BatchCreateFile ÃüÁî·µ»ØÊ±£¬
-					// source filter ÖªµÀÓĞÄÄĞ©ÎÄ¼ş¼Ğ±»Å×Æú
+					// å°†å…¶è®°å½•åœ¨è¢«æŠ›å¼ƒçš„æ–‡ä»¶å¤¹ç¼“å†²åŒºï¼Œä»¥ä¾¿ EDC_BatchCreateFile å‘½ä»¤è¿”å›æ—¶ï¼Œ
+					// source filter çŸ¥é“æœ‰å“ªäº›æ–‡ä»¶å¤¹è¢«æŠ›å¼ƒ
 //					cfi.DiscardFolderVer.push_back(cfi.SourceFileInfoVer[i]->strSourceFile) ;
 
 					int nDirStack = 1 ;
@@ -251,7 +268,7 @@ int CXCLocalFileDestnationFilter::OnCreateXCFile(SDataPack_CreateFileInfo& cfi)
 						{
 							if(cfi.SourceFileInfoVer[j]->strSourceFile.GetLength()>
 								cfi.SourceFileInfoVer[i]->strSourceFile.GetLength())
-							{// ÒòÎªÈôÒª°üÀ¨±»Å×ÆúµÄÄ¿Â¼£¬ÄÇÃ´ÎÄ¼şÃû³¤¶È±ØÈ»´óÓÚ¸ÃÄ¿Â¼Ãû³¤¶È£¨°üÀ¨Â·¾¶£©
+							{// å› ä¸ºè‹¥è¦åŒ…æ‹¬è¢«æŠ›å¼ƒçš„ç›®å½•ï¼Œé‚£ä¹ˆæ–‡ä»¶åé•¿åº¦å¿…ç„¶å¤§äºè¯¥ç›®å½•åé•¿åº¦ï¼ˆåŒ…æ‹¬è·¯å¾„ï¼‰
 								if(cfi.SourceFileInfoVer[j]->strSourceFile.Left(cfi.SourceFileInfoVer[i]->strSourceFile.GetLength()).CompareNoCase(
 									cfi.SourceFileInfoVer[i]->strSourceFile)!=0)
 								{
@@ -260,7 +277,7 @@ int CXCLocalFileDestnationFilter::OnCreateXCFile(SDataPack_CreateFileInfo& cfi)
 								else
 								{
 									if(CptGlobal::IsFolder(cfi.SourceFileInfoVer[j]->dwSourceAttr))
-									{// ÈôÒªÅ×ÆúµÄÄ¿Â¼°üÀ¨×ÓÄ¿Â¼£¬ÔòÄ¿Â¼Õ»¼Ó1
+									{// è‹¥è¦æŠ›å¼ƒçš„ç›®å½•åŒ…æ‹¬å­ç›®å½•ï¼Œåˆ™ç›®å½•æ ˆåŠ 1
 										++nDirStack ;
 									}
 
@@ -273,7 +290,7 @@ int CXCLocalFileDestnationFilter::OnCreateXCFile(SDataPack_CreateFileInfo& cfi)
 							}
 						}
 						else
-						{// ´ËÎª³öÄ¿Â¼Õ»,Ö±µ½Óöµ½ºÍÒªÅ×ÆúµÄÎÄ¼ş¼ĞÆ¥ÅäµÄ³öÄ¿Â¼Õ»²ÅÍË³ö¸ÃÑ­»·
+						{// æ­¤ä¸ºå‡ºç›®å½•æ ˆ,ç›´åˆ°é‡åˆ°å’Œè¦æŠ›å¼ƒçš„æ–‡ä»¶å¤¹åŒ¹é…çš„å‡ºç›®å½•æ ˆæ‰é€€å‡ºè¯¥å¾ªç¯
 							if(--nDirStack<=0)
 							{
 								i = j -1;
@@ -285,7 +302,7 @@ int CXCLocalFileDestnationFilter::OnCreateXCFile(SDataPack_CreateFileInfo& cfi)
 				else 
 					/**/
 				if(!bFolder && strDstFile.GetLength()>0 && !bDiscardInSrcOpen)
-				{// ÈôÎªÎÄ¼ş,ÇÒ²»ÊÇÔÚsource filter´¦ÒÑ±»Å×Æú
+				{// è‹¥ä¸ºæ–‡ä»¶,ä¸”ä¸æ˜¯åœ¨source filterå¤„å·²è¢«æŠ›å¼ƒ
 					bfi.strDstFile = strDstFile ;
 					bfi.strSrcFile = (*it)->strSourceFile ;
 					bfi.uFileID = (*it)->uFileID ;
@@ -328,7 +345,7 @@ int CXCLocalFileDestnationFilter::CreateXCFile(SDataPack_SourceFileInfo& sfi,Cpt
 	CptString strDestFile ;
 
 	if(this->IsRenameExe())
-	{// Èç¹ûÊÇ¡®¸ÄÃû¡¯Ê½¸´ÖÆ»òÕßÒÆ¶¯
+	{// å¦‚æœæ˜¯â€˜æ”¹åâ€™å¼å¤åˆ¶æˆ–è€…ç§»åŠ¨
 		strDestFile = m_strDestRoot ;//MAKE_FILE_FULL_NAME(m_strDstFileName) ;
 	}
 	else
@@ -352,23 +369,23 @@ int CXCLocalFileDestnationFilter::CreateXCFile(SDataPack_SourceFileInfo& sfi,Cpt
 #endif
 
 	if(!sfi.IsDiscard())
-	{// ÒòÎª´´½¨ÎÄ¼şÃüÁî¿ÉÄÜÎªÒì²½£¬
-		// ¼´¸ÃÎÄ¼şÔÚsource filter´ò¿ªÊÇÕı³££¬Ö»ÊÇÔÚ¶ÁÈ¡µ½Ò»¶¨Ê±ºò¾ÍÅ×Æú£¬
-		// È»¶ø¹ıÒ»¶ÎÊ±¼äºódestination filter²ÅÊÕµ½¸ÃÎÄ¼şµÄ´´½¨ÃüÁî£¬ËùÒÔÕâÀïµÃ×÷¼ì²â
+	{// å› ä¸ºåˆ›å»ºæ–‡ä»¶å‘½ä»¤å¯èƒ½ä¸ºå¼‚æ­¥ï¼Œ
+		// å³è¯¥æ–‡ä»¶åœ¨source filteræ‰“å¼€æ˜¯æ­£å¸¸ï¼Œåªæ˜¯åœ¨è¯»å–åˆ°ä¸€å®šæ—¶å€™å°±æŠ›å¼ƒï¼Œ
+		// ç„¶è€Œè¿‡ä¸€æ®µæ—¶é—´ådestination filteræ‰æ”¶åˆ°è¯¥æ–‡ä»¶çš„åˆ›å»ºå‘½ä»¤ï¼Œæ‰€ä»¥è¿™é‡Œå¾—ä½œæ£€æµ‹
 		
 		if(*m_pImpactFileBehavior!=SFDB_Replace && !CptGlobal::IsFolder(sfi.dwSourceAttr))
-		{// Èç¹ûÓöµ½³åÍ»ÎÄ¼ş×ÜÊÇ¸²¸Ç£¬ÄÇÃ´¾Í²»¼ì²âÊÇ·ñ´æÔÚ³åÍ»ÎÄ¼ş
+		{// å¦‚æœé‡åˆ°å†²çªæ–‡ä»¶æ€»æ˜¯è¦†ç›–ï¼Œé‚£ä¹ˆå°±ä¸æ£€æµ‹æ˜¯å¦å­˜åœ¨å†²çªæ–‡ä»¶
 			bool bIsDestExist = IsFileExist(strDestFile.c_str()) ;
 
 			if(bIsDestExist)
-			{// Ä¿±êÎÄ¼şÃûÒÑ´æÔÚ£¬Ôò»Øµ÷µ½ÉÏÒ»²ãÑ¯ÎÊ
+			{// ç›®æ ‡æ–‡ä»¶åå·²å­˜åœ¨ï¼Œåˆ™å›è°ƒåˆ°ä¸Šä¸€å±‚è¯¢é—®
 
 				SImpactFileResult result ;
 				
 				if(this->m_pEvent!=NULL)
 				{
 					if(*m_pImpactFileBehavior==SFDB_Default || *m_pImpactFileBehavior==SFDB_Rename)
-					{// µÈÓÚÄ¬ÈÏ£¨¸ÄÃû£©²ÅÏòÉÏ»Øµ÷
+					{// ç­‰äºé»˜è®¤ï¼ˆæ”¹åï¼‰æ‰å‘ä¸Šå›è°ƒ
 						SImpactFileInfo ImpactInfo ;
 						ImpactInfo.ImpactType = IT_SameFileName ;
 
@@ -390,15 +407,15 @@ int CXCLocalFileDestnationFilter::CreateXCFile(SDataPack_SourceFileInfo& sfi,Cpt
 
 				switch(result.result)
 				{
-				case SFDB_Skip: // Ìø¹ı
-					{// ¾ÍËãÊÇÌø¹ı£¬³ıÁË°ÑdiscardÉèÖÃÎªtrueÍâ£¬Ò²Ó¦¸Ã¼ÓÈëµ½ m_FileInfoList »º³åÇøÀï
+				case SFDB_Skip: // è·³è¿‡
+					{// å°±ç®—æ˜¯è·³è¿‡ï¼Œé™¤äº†æŠŠdiscardè®¾ç½®ä¸ºtrueå¤–ï¼Œä¹Ÿåº”è¯¥åŠ å…¥åˆ° m_FileInfoList ç¼“å†²åŒºé‡Œ
 						//sfi.bDiscard = true ;
 						sfi.SetDiscard(true) ;
 
 						dfi.hFile = INVALID_HANDLE_VALUE ;
 						dfi.bNoBuf = false ;
 						dfi.strFileName = strDestFile ;
-						dfi.pSfi = &sfi ; // °ÑÆäÖ¸Õë±£´æÆğÀ´
+						dfi.pSfi = &sfi ; // æŠŠå…¶æŒ‡é’ˆä¿å­˜èµ·æ¥
 
 						m_FileInfoList.push_back(dfi) ;
 					}
@@ -406,15 +423,15 @@ int CXCLocalFileDestnationFilter::CreateXCFile(SDataPack_SourceFileInfo& sfi,Cpt
 					return nRet ;
 
 				case SFDB_Default:
-				case SFDB_Rename: // ¸ÄÃû
+				case SFDB_Rename: // æ”¹å
 					strDestFile = result.strNewDstFileName ;
 					break ;
 
-				case SFDB_Replace: // ¸²¸Ç
+				case SFDB_Replace: // è¦†ç›–
 					break ;
 
 				default:
-				case SFDB_StopCopy: // ÍË³ö
+				case SFDB_StopCopy: // é€€å‡º
 					*m_pRunningState = CFS_ReadyStop ;
 					return ErrorHandlingFlag_Exit ;
 				}
@@ -422,14 +439,14 @@ int CXCLocalFileDestnationFilter::CreateXCFile(SDataPack_SourceFileInfo& sfi,Cpt
 		}
 		
 		if(CptGlobal::IsFolder(sfi.dwSourceAttr))
-		{// ´´½¨ÎÄ¼ş¼Ğ
+		{// åˆ›å»ºæ–‡ä»¶å¤¹
 
 //EXCEPTION_RETRY_CREATEFOLDER:
 			
 			BOOL bDirectResult = FALSE ;
 
 			if(sfi.strSourceFile.CompareNoCase(strDestFile)==0)
-			{// Èç¹ûÊÇ×öÎÄ¼ş¼Ğ¸´¼şµÄ»°
+			{// å¦‚æœæ˜¯åšæ–‡ä»¶å¤¹å¤ä»¶çš„è¯
 				SImpactFileInfo ImpactInfo ;
 				SImpactFileResult result ;
 				ImpactInfo.ImpactType = IT_SameFileName ;
@@ -452,7 +469,7 @@ int CXCLocalFileDestnationFilter::CreateXCFile(SDataPack_SourceFileInfo& sfi,Cpt
 			}
 			
 			if(!bDirectResult && ::GetLastError()!=ERROR_ALREADY_EXISTS)
-			{// ´´½¨ÎÄ¼ş¼ĞÊ§°Ü, Ä¿Ç°Óöµ½´´½¨ÎÄ¼ş¼ĞÊ§°Ü£¬ÔòÖ±½ÓÍË³ö
+			{// åˆ›å»ºæ–‡ä»¶å¤¹å¤±è´¥, ç›®å‰é‡åˆ°åˆ›å»ºæ–‡ä»¶å¤¹å¤±è´¥ï¼Œåˆ™ç›´æ¥é€€å‡º
 
 				SXCExceptionInfo ei ;
 				ei.ErrorCode.nSystemError = ::GetLastError() ;
@@ -467,7 +484,7 @@ int CXCLocalFileDestnationFilter::CreateXCFile(SDataPack_SourceFileInfo& sfi,Cpt
 			}
 
 			if(!sfi.IsDiscard())
-			{// Èô¸ÃÎÄ¼ş¼Ğ´´½¨³É¹¦£¬ÇÒ²»±»Å×Æú,ÄÇÃ´¾ÍÔö¼ÓURIµÄÕ»
+			{// è‹¥è¯¥æ–‡ä»¶å¤¹åˆ›å»ºæˆåŠŸï¼Œä¸”ä¸è¢«æŠ›å¼ƒ,é‚£ä¹ˆå°±å¢åŠ URIçš„æ ˆ
 				m_DestURI.Push(GetRawFileName(strDestFile)) ;
 			}
 
@@ -475,11 +492,11 @@ int CXCLocalFileDestnationFilter::CreateXCFile(SDataPack_SourceFileInfo& sfi,Cpt
 			//dfi.pSfi->uFileID = sfi.uFileID ;
 			dfi.uRemainSize = 0 ;
 			dfi.hFile = INVALID_HANDLE_VALUE ;
-			dfi.pSfi = &sfi ; // °ÑÆäÖ¸Õë±£´æÆğÀ´
+			dfi.pSfi = &sfi ; // æŠŠå…¶æŒ‡é’ˆä¿å­˜èµ·æ¥
 
 		}
 		else
-		{// ´´½¨ÎÄ¼ş
+		{// åˆ›å»ºæ–‡ä»¶
 
 			//Debug_Printf(_T("CXCLocalFileDestnationFilter::CreateXCFile() 4 create file")) ;
 
@@ -490,7 +507,7 @@ int CXCLocalFileDestnationFilter::CreateXCFile(SDataPack_SourceFileInfo& sfi,Cpt
 			dfi.bNoBuf = (m_StorageInfo.uDiskType!=DRIVE_REMOTE && (sfi.nFileSize >= 64*1024 || (sfi.nFileSize%m_StorageInfo.nSectorSize)==0)) ;
 
 			dfi.strFileName = strDestFile ;
-			dfi.pSfi = &sfi ; // °ÑÆäÖ¸Õë±£´æÆğÀ´
+			dfi.pSfi = &sfi ; // æŠŠå…¶æŒ‡é’ˆä¿å­˜èµ·æ¥
 
 			DWORD dwFlag = (dfi.bNoBuf ? FILE_FLAG_NO_BUFFERING : 0) | m_nCreateFileFlag;// FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED;
 
@@ -500,7 +517,7 @@ int CXCLocalFileDestnationFilter::CreateXCFile(SDataPack_SourceFileInfo& sfi,Cpt
 		CptPerformanceCalcator::GetInstance()->EndCalAndSave(dw52,22) ;
 #endif
 
-EXCEPTION_RETRY_CREATEDESTFILE:// ÖØÊÔ£¨´´½¨Ä¿±êÎÄ¼ş£©
+EXCEPTION_RETRY_CREATEDESTFILE:// é‡è¯•ï¼ˆåˆ›å»ºç›®æ ‡æ–‡ä»¶ï¼‰
 
 			
 #ifdef COMPILE_TEST_PERFORMANCE
@@ -529,14 +546,14 @@ EXCEPTION_RETRY_CREATEDESTFILE:// ÖØÊÔ£¨´´½¨Ä¿±êÎÄ¼ş£©
 
 				if(dfi.uRemainSize>m_nSwapChunkSize)
 				{
-					unsigned __int64 dwLow = dfi.bNoBuf ? ALIGN_SIZE_UP(dfi.uRemainSize,m_StorageInfo.nSectorSize) : dfi.uRemainSize ;
-					DWORD dwHi = (DWORD)(dwLow>>32) ;
+					LARGE_INTEGER liFileSize ;
+					liFileSize.QuadPart = (LONGLONG)(dfi.bNoBuf ? ALIGN_SIZE_UP(dfi.uRemainSize,m_StorageInfo.nSectorSize) : dfi.uRemainSize) ;
 
-EXCEPTION_RETRY_ALLOCATEFILESIZE:// ÖØÊÔ£¨·ÖÅäÎÄ¼ş´óĞ¡£©
-					if(::SetFilePointer(dfi.hFile, (DWORD)dwLow, (PLONG)&dwHi, FILE_BEGIN)!=INVALID_SET_FILE_POINTER
-						&& ::SetEndOfFile(dfi.hFile))
+EXCEPTION_RETRY_ALLOCATEFILESIZE:// é‡è¯•ï¼ˆåˆ†é…æ–‡ä»¶å¤§å°ï¼‰
+					if(::SetFilePointerEx(dfi.hFile,liFileSize,NULL,FILE_BEGIN) && ::SetEndOfFile(dfi.hFile))
 					{
-						::SetFilePointer(dfi.hFile, 0, NULL, FILE_BEGIN);
+						LARGE_INTEGER liStart = {} ;
+						::SetFilePointerEx(dfi.hFile,liStart,NULL,FILE_BEGIN) ;
 					}
 					else
 					{
@@ -546,22 +563,22 @@ EXCEPTION_RETRY_ALLOCATEFILESIZE:// ÖØÊÔ£¨·ÖÅäÎÄ¼ş´óĞ¡£©
 						{
 							switch(this->GetErrorHandleResult(sfi,strDestFile))
 							{
-							case ErrorHandlingFlag_Ignore: // ºöÂÔ
+							case ErrorHandlingFlag_Ignore: // å¿½ç•¥
 								strOutDstFile = _T("") ;
 								sfi.SetDiscard(true) ;
 								nRet = ErrorHandlingFlag_Ignore ;
 								break ;
 
-							case ErrorHandlingFlag_Retry: // ÖØÊÔ£¨·ÖÅäÎÄ¼ş´óĞ¡£©
+							case ErrorHandlingFlag_Retry: // é‡è¯•ï¼ˆåˆ†é…æ–‡ä»¶å¤§å°ï¼‰
 								goto EXCEPTION_RETRY_ALLOCATEFILESIZE ;
 
 							default:
-							case ErrorHandlingFlag_Exit: // ÍË³ö
+							case ErrorHandlingFlag_Exit: // é€€å‡º
 								strOutDstFile = _T("") ;
 								sfi.SetDiscard(true) ;
 								*this->m_pRunningState = CFS_ReadyStop ;
 
-								// Òò´íÎó¶øÍË³öµÄ»°£¬ÔòÓ¦°Ñ¸Õ¸Õ´´½¨µÄÎÄ¼şÉ¾³ıµô
+								// å› é”™è¯¯è€Œé€€å‡ºçš„è¯ï¼Œåˆ™åº”æŠŠåˆšåˆšåˆ›å»ºçš„æ–‡ä»¶åˆ é™¤æ‰
 								if(dfi.hFile!=INVALID_HANDLE_VALUE)
 								{
 									::CloseHandle(dfi.hFile) ;
@@ -582,17 +599,17 @@ EXCEPTION_RETRY_ALLOCATEFILESIZE:// ÖØÊÔ£¨·ÖÅäÎÄ¼ş´óĞ¡£©
 				{
 					switch(this->GetErrorHandleResult(sfi,strDestFile))
 					{
-					case ErrorHandlingFlag_Ignore: // ºöÂÔ
+					case ErrorHandlingFlag_Ignore: // å¿½ç•¥
 						//sfi.bDiscard = true ;
 						sfi.SetDiscard(true) ;
 						nRet = ErrorHandlingFlag_Ignore ;
 						break ;
 
-					case ErrorHandlingFlag_Retry: // ÖØÊÔ£¨´´½¨Ä¿±êÎÄ¼ş£©
+					case ErrorHandlingFlag_Retry: // é‡è¯•ï¼ˆåˆ›å»ºç›®æ ‡æ–‡ä»¶ï¼‰
 						goto EXCEPTION_RETRY_CREATEDESTFILE ;
 
 					default:
-					case ErrorHandlingFlag_Exit: // ÍË³ö
+					case ErrorHandlingFlag_Exit: // é€€å‡º
 						//sfi.bDiscard = true ;
 						sfi.SetDiscard(true) ;
 						*this->m_pRunningState = CFS_ReadyStop ;
@@ -606,13 +623,13 @@ EXCEPTION_RETRY_ALLOCATEFILESIZE:// ÖØÊÔ£¨·ÖÅäÎÄ¼ş´óĞ¡£©
 #endif
 		}
 
-		// ÎŞÂÛÊÇ´´½¨ÎÄ¼ş³É¹¦Óë·ñ£¬ÕâÀï¶¼±£´æ½ø»º´æÀï
+		// æ— è®ºæ˜¯åˆ›å»ºæ–‡ä»¶æˆåŠŸä¸å¦ï¼Œè¿™é‡Œéƒ½ä¿å­˜è¿›ç¼“å­˜é‡Œ
 	}
 	else
-	{// ¾ÍËã¸ÃÎÄ¼şÊÇ±»Å×ÆúµÄÒ²Ó¦¸Ã·ÅÈëµ½ m_FileInfoList ÀïÈ¥
+	{// å°±ç®—è¯¥æ–‡ä»¶æ˜¯è¢«æŠ›å¼ƒçš„ä¹Ÿåº”è¯¥æ”¾å…¥åˆ° m_FileInfoList é‡Œå»
 		
 		if(sfi.IsError())
-		{// Èç¹û¸ÃÎÄ¼şÔÚ´´½¨Ê±ÒÑ³ö´í,Ôò°ÑÆä¼ÇÂ¼ÏÂÀ´
+		{// å¦‚æœè¯¥æ–‡ä»¶åœ¨åˆ›å»ºæ—¶å·²å‡ºé”™,åˆ™æŠŠå…¶è®°å½•ä¸‹æ¥
 
 			SXCExceptionInfo ei ;
 
@@ -626,7 +643,7 @@ EXCEPTION_RETRY_ALLOCATEFILESIZE:// ÖØÊÔ£¨·ÖÅäÎÄ¼ş´óĞ¡£©
 
 		dfi.uRemainSize = 0 ;
 		dfi.hFile = INVALID_HANDLE_VALUE ;
-		dfi.pSfi = &sfi ; // °ÑÆäÖ¸Õë±£´æÆğÀ´
+		dfi.pSfi = &sfi ; // æŠŠå…¶æŒ‡é’ˆä¿å­˜èµ·æ¥
 	}
 
 	if(CptGlobal::IsFolder(dfi.pSfi->dwSourceAttr))
@@ -664,13 +681,13 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 	{
 		bIsRunning = this->IsValideRunningState() ;
 
-		fdc.FileDoneConfirmList.push_back((*it)->uFileID) ; // ÊÕ¼¯¿ÉÒÔÈÃsource filterÊÍ·ÅÏàÓ¦ÎÄ¼ş×ÊÔ´µÄÎÄ¼şID
+		fdc.FileDoneConfirmList.push_back((*it)->uFileID) ; // æ”¶é›†å¯ä»¥è®©source filteré‡Šæ”¾ç›¸åº”æ–‡ä»¶èµ„æºçš„æ–‡ä»¶ID
 
 		bFound = false ;
 
-		{// ²éÕÒ¶ÔÓ¦µÄ file ID
+		{// æŸ¥æ‰¾å¯¹åº”çš„ file ID
 			if(CptGlobal::IsFolder((*it)->dwSourceAttr))
-			{// ÎÄ¼ş¼Ğ
+			{// æ–‡ä»¶å¤¹
 				_ASSERT(!m_FolderInfoList.empty()) ;
 
 				//DstFileIt = m_FolderInfoList.rbegin() ;
@@ -697,7 +714,7 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 				}
 			}
 			else
-			{// ÎÄ¼ş
+			{// æ–‡ä»¶
 
 				_ASSERT(!m_FileInfoList.empty()) ;
 
@@ -734,7 +751,7 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 			if(bFound)
 			{
 				if(CptGlobal::IsFolder((*it)->dwSourceAttr))
-				{// ÎÄ¼ş¼Ğ
+				{// æ–‡ä»¶å¤¹
 					//if(!(*it)->bLocal)
 					if(!(*it)->IsLocal())
 					{
@@ -751,7 +768,7 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 							//it2->second.hFile = INVALID_HANDLE_VALUE ;
 							//if(!(*it)->bLocal)
 							if(!(*it)->IsLocal())
-							{// Ô´ÎÄ¼ş¼Ğ·Ç±¾µØÎÄ¼ş
+							{// æºæ–‡ä»¶å¤¹éæœ¬åœ°æ–‡ä»¶
 								BOOL b3 = ::SetFileAttributes((*DstFileIt).strFileName.c_str(),(*it)->dwSourceAttr) ;
 
 								//DWORD dwNew = ::GetFileAttributes(it2->second.strFileName.c_str()) & ~FILE_ATTRIBUTE_COMPRESSED ;
@@ -775,9 +792,9 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 				else
 				{
 					if(INVALID_HANDLE_VALUE!=(*DstFileIt).hFile && 0==(*DstFileIt).uRemainSize && bIsRunning)
-					{// ¸ÃÎÄ¼şÒÑÍê³ÉĞ´Èëµ½´ÅÅÌ²¢ÇÒÎªÓĞĞ§µÄ¾ä±ú¡£ÒòÎªÈç¹ûÔ´ÎÄ¼ş´óĞ¡Îª0µÄ»°£¬Æä uRemainSize Ò²»áÎª0µÄ
+					{// è¯¥æ–‡ä»¶å·²å®Œæˆå†™å…¥åˆ°ç£ç›˜å¹¶ä¸”ä¸ºæœ‰æ•ˆçš„å¥æŸ„ã€‚å› ä¸ºå¦‚æœæºæ–‡ä»¶å¤§å°ä¸º0çš„è¯ï¼Œå…¶ uRemainSize ä¹Ÿä¼šä¸º0çš„
 
-						{// °ÑÍê³ÉĞ´µÄÎÄ¼ş¼ÓÈë»º³åÇø£¬´ıÏÂÃæ´¦»Øµ÷
+						{// æŠŠå®Œæˆå†™çš„æ–‡ä»¶åŠ å…¥ç¼“å†²åŒºï¼Œå¾…ä¸‹é¢å¤„å›è°ƒ
 //							fei.strFileName = (*DstFileIt).strFileName ;
 							fei.uFileID = (*DstFileIt).pSfi->uFileID;
 
@@ -790,7 +807,7 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 
 							/**
 						if(it2->second.bNoBuf && (*it)->nFileSize%m_StorageInfo.nSectorSize)
-						{// ÕâÀïĞèÒªÖØĞÂ´ò¿ªÎÄ¼ş¾ä±ú
+						{// è¿™é‡Œéœ€è¦é‡æ–°æ‰“å¼€æ–‡ä»¶å¥æŸ„
 							::CloseHandle(it2->second.hFile) ;
 
 							it2->second.hFile = ::CreateFile(it2->second.strFileName.c_str(),GENERIC_WRITE,FILE_SHARE_READ,NULL,OPEN_EXISTING,
@@ -798,7 +815,7 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 						}
 
 						if(m_StorageInfo.nSectorSize>0 && it2->second.uRemainSize!=0)
-						{// Èô¸ÃÎÄ¼şĞèÒªµ÷Õû³¤¶È
+						{// è‹¥è¯¥æ–‡ä»¶éœ€è¦è°ƒæ•´é•¿åº¦
 
 							_ASSERT(it2->second.hFile!=INVALID_HANDLE_VALUE) ;
 
@@ -813,7 +830,7 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 						/**/
 						if((*DstFileIt).bNoBuf && (*it)->nFileSize>0 && m_StorageInfo.nSectorSize>0 
 							&& (*it)->nFileSize%m_StorageInfo.nSectorSize )
-						{// Èô¸ÃÎÄ¼şĞèÒªµ÷Õû³¤¶È
+						{// è‹¥è¯¥æ–‡ä»¶éœ€è¦è°ƒæ•´é•¿åº¦
 							//HANDLE hFile = it2->second.hFile ;
 							//::FlushFileBuffers(it2->second.hFile) ;
 
@@ -852,7 +869,7 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 #endif
 					}
 					else
-					{// ÎÄ¼şÉĞÎ´ÍêÈ«Ğ´Èë´ÅÅÌ
+					{// æ–‡ä»¶å°šæœªå®Œå…¨å†™å…¥ç£ç›˜
 
 						if((*DstFileIt).hFile!=INVALID_HANDLE_VALUE)
 						{
@@ -872,7 +889,7 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 				}
 			}
 			else
-			{// ÕâÊÇ²»Ó¦¸ÃÕÒ²»µ½µÄ£¬¾ÍËãÊÇÅ×ÆúµÄÎÄ¼ş£¬ÔÚm_FileInfoLisÀïÒ²¸ÃÕÒµ½¡£Çë²Î¼û 'ExtremeCopy Ô­Àí.docx' ÀïµÄËã·¨ÃèÊö
+			{// è¿™æ˜¯ä¸åº”è¯¥æ‰¾ä¸åˆ°çš„ï¼Œå°±ç®—æ˜¯æŠ›å¼ƒçš„æ–‡ä»¶ï¼Œåœ¨m_FileInfoLisé‡Œä¹Ÿè¯¥æ‰¾åˆ°ã€‚è¯·å‚è§ 'ExtremeCopy åŸç†.docx' é‡Œçš„ç®—æ³•æè¿°
 				_ASSERT(FALSE) ;
 				//Release_Printf(_T("RoundOffFile() not found")) ;
 				//fdc.FileDoneConfirmList.pop_back() ;
@@ -894,7 +911,7 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 					{
 						::CloseHandle((*DstFileIt).hFile) ;
 
-						// Ö»ÓĞÊÇÒÑ´ò¿ªµÄÎÄ¼ş¶¼»áÉ¾³ı£¬ÒòÎª¿ÉÄÜµ±¸´ÖÆÊ±Óöµ½ÏàÍ¬ÎÄ¼ş£¬¶ø´ËÊ±ÓÃ»§µã»÷'skip'µÄ»°£¬ÔÚÄ¿±êÎÄ¼ş¼ĞµÄ¸ÃÎÄ¼şÊÇÓĞĞ§µÄ£¬ËùÒÔÊÇ²»Ó¦¸ÃÉ¾³ıµÄ
+						// åªæœ‰æ˜¯å·²æ‰“å¼€çš„æ–‡ä»¶éƒ½ä¼šåˆ é™¤ï¼Œå› ä¸ºå¯èƒ½å½“å¤åˆ¶æ—¶é‡åˆ°ç›¸åŒæ–‡ä»¶ï¼Œè€Œæ­¤æ—¶ç”¨æˆ·ç‚¹å‡»'skip'çš„è¯ï¼Œåœ¨ç›®æ ‡æ–‡ä»¶å¤¹çš„è¯¥æ–‡ä»¶æ˜¯æœ‰æ•ˆçš„ï¼Œæ‰€ä»¥æ˜¯ä¸åº”è¯¥åˆ é™¤çš„
 						CptGlobal::ForceDeleteFile((*DstFileIt).strFileName) ; 
 					}
 
@@ -920,12 +937,12 @@ void CXCLocalFileDestnationFilter::RoundOffFile(pt_STL_list(SDataPack_SourceFile
 	}// end for
 
 	if(m_pEvent!=NULL && !FeiVer.empty())
-	{// °ÑÍê³ÉĞ´µÄÎÄ¼şÍùÉÏ»Øµ÷
+	{// æŠŠå®Œæˆå†™çš„æ–‡ä»¶å¾€ä¸Šå›è°ƒ
 		m_pEvent->XCOperation_FileEnd(FeiVer) ;
 	}
 
 	if(!fdc.FileDoneConfirmList.empty())
-	{// ·¢ËÍÎÄ¼şÍê³ÉÈ·ÈÏÃüÁî
+	{// å‘é€æ–‡ä»¶å®Œæˆç¡®è®¤å‘½ä»¤
 		m_pUpstreamFilter->OnDataTrans(this,EDC_FileDoneConfirm,&fdc) ;
 	}
 
@@ -992,7 +1009,7 @@ int CXCLocalFileDestnationFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterC
 		this->OnStop() ;
 		break ;
 
-	case EDC_LinkIni: // ĞÂµÄFILTER LINK
+	case EDC_LinkIni: // æ–°çš„FILTER LINK
 		{
 			SDataPack_LinkIni* pLinkIni = (SDataPack_LinkIni*)pFileData ;
 			m_DestURI.Clean() ;
@@ -1011,7 +1028,7 @@ int CXCLocalFileDestnationFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterC
 		}
 		break ;
 
-	//case EDC_CreateFile:// ´´½¨ÎÄ¼ş
+	//case EDC_CreateFile:// åˆ›å»ºæ–‡ä»¶
 	//	{
 	//		_ASSERT(pFileData!=	NULL) ;
 	//		SDataPack_SourceFileInfo* pSfi = (SDataPack_SourceFileInfo*)pFileData ;
@@ -1020,7 +1037,7 @@ int CXCLocalFileDestnationFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterC
 	//	}
 	//	break ;
 
-	case EDC_BatchCreateFile: // ÅúÁ¿´´½¨ÎÄ¼ş
+	case EDC_BatchCreateFile: // æ‰¹é‡åˆ›å»ºæ–‡ä»¶
 		{
 			_ASSERT(pFileData!=NULL) ;
 
@@ -1039,7 +1056,7 @@ int CXCLocalFileDestnationFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterC
 		}
 		break ;
 
-	case EDC_FileData: // ÎÄ¼şÊı¾İ
+	case EDC_FileData: // æ–‡ä»¶æ•°æ®
 		{
 			if(pFileData!=NULL)
 			{
@@ -1061,12 +1078,12 @@ int CXCLocalFileDestnationFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterC
 		}
 		break ;
 
-	case EDC_FileHash: // ÎÄ¼şµÄHASH Öµ
+	case EDC_FileHash: // æ–‡ä»¶çš„HASH å€¼
 		break ;
 
 
-	case EDC_FileOperationCompleted: // ×÷ÓÃÓÚ¸ÃÎÄ¼şµÄ²Ù×÷ÒÑÍê³É
-		{// ×öÎÄ¼şµÄÉ¨Î²¹¤×÷
+	case EDC_FileOperationCompleted: // ä½œç”¨äºè¯¥æ–‡ä»¶çš„æ“ä½œå·²å®Œæˆ
+		{// åšæ–‡ä»¶çš„æ‰«å°¾å·¥ä½œ
 
 			Debug_Printf(_T("CXCLocalFileDestnationFilter::OnDataTrans() EDC_FileOperationCompleted 1")) ;
 
@@ -1080,13 +1097,13 @@ int CXCLocalFileDestnationFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterC
 		}
 		break ;
 
-	//case EDC_FolderChildrenOperationCompleted: // ×÷ÓÃÓÚ¸ÃÎÄ¼ş¼ĞµÄ×ÓÎÄ¼şºÍÎÄ¼ş¼Ğ²Ù×÷ÒÑÍê³É
+	//case EDC_FolderChildrenOperationCompleted: // ä½œç”¨äºè¯¥æ–‡ä»¶å¤¹çš„å­æ–‡ä»¶å’Œæ–‡ä»¶å¤¹æ“ä½œå·²å®Œæˆ
 	//	{
-	//		this->m_DestURI.Pop() ; // µ¯³ö URI Õ»
+	//		this->m_DestURI.Pop() ; // å¼¹å‡º URI æ ˆ
 	//	}
 	//	break ;
 
-	case EDC_LinkEnded: // ËùÓĞµÄ¸´ÖÆ¹¤×÷×¼±¸Íê³É£¬×ö×îºóµÄÉ¨Î²¹¤×÷
+	case EDC_LinkEnded: // æ‰€æœ‰çš„å¤åˆ¶å·¥ä½œå‡†å¤‡å®Œæˆï¼Œåšæœ€åçš„æ‰«å°¾å·¥ä½œ
 		{
 			SDataPack_FileOperationCompleted* pFOC = (SDataPack_FileOperationCompleted*)pFileData ;
 
