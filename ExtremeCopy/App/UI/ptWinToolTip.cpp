@@ -85,7 +85,7 @@ BOOL CptWinToolTip::AddTip(HWND hWnd,HINSTANCE hInst,TCHAR *Tip,UINT id , BOOL B
 
 	ti.uFlags =  TTF_IDISHWND | TTF_SUBCLASS;
 	ti.hwnd   = hWnd;							//Handle of the window in which the Contol resides
-	ti.uId    =(UINT)GetDlgItem(hWnd,id);       //ID of the Cotrol for which Tool Tip will be Displyed
+	ti.uId    = reinterpret_cast<UINT_PTR>(GetDlgItem(hWnd,id));       //ID of the Cotrol for which Tool Tip will be Displyed
 	ti.hinst  = hInst;
 	ti.lpszText  = Tip;							//Tip you want to Display;
 	ti.rect.left = ti.rect.top = ti.rect.bottom = ti.rect.right = 0; 
@@ -178,7 +178,7 @@ bool CptWinToolTip::BindControl(HWND hControlWnd,TCHAR* pTxt)
 		//ti.cbSize = sizeof(TOOLINFO);
 		ti.uFlags =  TTF_IDISHWND | TTF_SUBCLASS;
 		ti.hwnd   = ::GetParent(hControlWnd);		//Handle of the window in which the Contol resides
-		ti.uId    =(UINT)hControlWnd;       //ID of the Cotrol for which Tool Tip will be Displyed
+		ti.uId    = reinterpret_cast<UINT_PTR>(hControlWnd);       //ID of the Cotrol for which Tool Tip will be Displyed
 		//ti.hinst  = hInst;
 		ti.lpszText  = pTxt;							//Tip you want to Display;
 		//ti.rect.left = ti.rect.top = ti.rect.bottom = ti.rect.right = 0; 
@@ -203,7 +203,7 @@ bool CptWinToolTip::UpdateDisplayText(LPTSTR lpszTxt)
 		ti.cbSize = sizeof(TOOLINFO);
 		//ti.uFlags =  TTF_IDISHWND | TTF_SUBCLASS;
 		//ti.hwnd   = hWnd;							//Handle of the window in which the Contol resides
-		//ti.uId    =(UINT)hControlWnd;       //ID of the Cotrol for which Tool Tip will be Displyed
+		//ti.uId    = reinterpret_cast<UINT_PTR>(hControlWnd);       //ID of the Cotrol for which Tool Tip will be Displyed
 		//ti.hinst  = hInst;
 		ti.lpszText  = lpszTxt;							//Tip you want to Display;
 		//ti.rect.left = ti.rect.top = ti.rect.bottom = ti.rect.right = 0; 

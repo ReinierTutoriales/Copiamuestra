@@ -213,7 +213,7 @@ bool CXCCopyTask::ExecuteTaskFileByExtremeCopy(CptString& strTaskFile,const TCHA
 		{
 			if(CptGlobal::IsNeedElevatePrivilege())
 			{// VISTA
-				if((int)::ShellExecute(NULL,_T("runas"),_T("ExtremeCopy.exe"),strCmdLine.c_str(),strXCExeFileFolder.c_str(),SW_SHOW)>32)
+				if(reinterpret_cast<INT_PTR>(::ShellExecute(NULL,_T("runas"),_T("ExtremeCopy.exe"),strCmdLine.c_str(),strXCExeFileFolder.c_str(),SW_SHOW))>32)
 				{ 
 				}
 			}

@@ -101,7 +101,7 @@ bool CHyperlink::Create( PHYPERLINKSTRUCT phs )
 		return false;
 
 	m_hWnd = CreateWindow( _T("STATIC"), _T(""), WS_CHILD | WS_VISIBLE, phs->coordX, phs->coordY, phs->width, phs->height,
-						   phs->hWndParent, (HMENU)phs->ctlID, GetModuleHandle( NULL ), NULL );
+						   phs->hWndParent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(phs->ctlID)), GetModuleHandle( NULL ), NULL );
 
 	if( m_hWnd == NULL )
 		return false;

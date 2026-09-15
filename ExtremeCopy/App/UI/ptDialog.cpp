@@ -194,11 +194,11 @@ HWND CptDialog::GetDlgItem(int nItemID) const
 	return NULL ;
 }
 
-long CptDialog::SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam) 
+LRESULT CptDialog::SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam) 
 {
 	if(m_hWnd!=NULL)
 	{
-		return (long)::SendMessage(m_hWnd,uMsg,wParam,lParam) ;
+		return ::SendMessage(m_hWnd,uMsg,wParam,lParam) ;
 	}
 
 	return 0 ;

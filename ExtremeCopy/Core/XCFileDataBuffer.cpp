@@ -51,7 +51,7 @@ void CXCFileDataBuffer::Release()
 	if(m_pBlockBuf!=NULL)
 	{
 		::VirtualUnlock(m_pBlockBuf,m_nChunkSize) ;
-		::VirtualFree(m_pBlockBuf,m_nChunkSize,MEM_RELEASE) ;
+		::VirtualFree(m_pBlockBuf,0,MEM_RELEASE) ;
 		//::free(m_pBlockBuf) ;
 		m_pBlockBuf = NULL ;
 	}

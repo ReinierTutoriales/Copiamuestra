@@ -209,7 +209,7 @@ void CXCNormalWndUIState::UpdateUI(const EUpdateUIType uuit,void* pParam1,void* 
 			if(!m_pMainDlg->m_bExit)
 			{
 				SXCUIOneSecondUpdateDisplay* p = (SXCUIOneSecondUpdateDisplay*)pParam1 ;
-				BOOL bCopyDone = (BOOL)pParam2 ;
+				BOOL bCopyDone = (pParam2 != NULL) ? TRUE : FALSE ;
 
 				this->UpdateOneSecondUI(*p,bCopyDone?true:false) ;
 			}

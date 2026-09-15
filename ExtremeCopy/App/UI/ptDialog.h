@@ -62,7 +62,7 @@ public:
 	void SetIcon(HICON hIcon) ;
 
 	HWND GetDlgItem(int nItemID) const ;
-	long SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam) ;
+	LRESULT SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam) ;
 	BOOL PostMessage(UINT uMsg,WPARAM wParam,LPARAM lParam) ;
 
 	HWND GetSafeHwnd() const {return m_hWnd ;}

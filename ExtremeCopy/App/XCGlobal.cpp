@@ -390,7 +390,7 @@ bool ConfirmExitApp(HWND hParentWnd)
 
 void OnHyperLinkHomePageCallBack2(void* pVoid)
 {
-	EWebLink LinkType = (EWebLink)(int)pVoid ;
+	EWebLink LinkType = static_cast<EWebLink>(reinterpret_cast<INT_PTR>(pVoid)) ;
 	OpenLink(LinkType) ;
 }
 
@@ -463,7 +463,7 @@ bool OpenLink(const EWebLink LinkType)
 
 bool OpenLink(const TCHAR* pLink)
 {
-	return ((int)::ShellExecute(NULL,_T("open"),pLink,NULL,NULL,SW_SHOWNORMAL)>32) ;
+	return (reinterpret_cast<INT_PTR>(::ShellExecute(NULL,_T("open"),pLink,NULL,NULL,SW_SHOWNORMAL))>32) ;
 }
 
 // 判断是否改名的复制或移动文件

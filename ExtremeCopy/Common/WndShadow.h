@@ -89,7 +89,7 @@ protected:
 
 	HWND m_hWnd;
 
-	LONG m_OriParentProc;	// Original WndProc of parent window
+	LONG_PTR m_OriParentProc;	// Original WndProc of parent window
 
 	enum ShadowStatus
 	{

@@ -721,12 +721,12 @@ void CXCTransApp::OnFailedFile_Update(const SFailedFileInfo& OldFfi,const pt_STL
 		{// 用户点击了界面，并对该文件进行恢复操作
 			if(OldFfi.strDstFile.GetLength()>0 && OldFfi.strSrcFile.GetLength()>0)
 			{
-				m_FailedFileMsgQue.PostMsg((void*)(OldFfi.nIndex+1)) ;
+				m_FailedFileMsgQue.PostMsg(reinterpret_cast<void*>(static_cast<INT_PTR>(OldFfi.nIndex + 1))) ;
 			}
 		}
 		else if(OldFfi.Status==EFST_Waitting && FailedFileVer[OldFfi.nIndex].Status==EFST_Failed)
 		{// 用户点击了界面，并对该文件进行取消操作
-			m_FailedFileMsgQue.RemoveMsg((void*)(OldFfi.nIndex+1)) ;
+			m_FailedFileMsgQue.RemoveMsg(reinterpret_cast<void*>(static_cast<INT_PTR>(OldFfi.nIndex + 1))) ;
 		}
 	}
 }
@@ -2184,7 +2184,7 @@ void CXCTransApp::ProcessFailedFiles()
 
 				if(p!=NULL)
 				{
-					int nIndex = (int)p - 1 ;
+					int nIndex = static_cast<int>(reinterpret_cast<INT_PTR>(p)) - 1 ;
 
 					bGetFailedFile = m_pFailedFile->GetFailedFileByIndex(nIndex,ffi) ;
 

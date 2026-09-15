@@ -137,7 +137,7 @@ const CptStringList& CptFileDialog::GetSelectedFiles() const
 	return m_StrList ;
 }
 
-LONG g_lOriWndProc = NULL;
+LONG_PTR g_lOriWndProc = 0;
 BOOL g_bReplaced = FALSE;
 
 LRESULT static __stdcall  _WndProc ( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam  )
@@ -150,7 +150,7 @@ LRESULT static __stdcall  _WndProc ( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
         }
     }
 
-	return ((WNDPROC)g_lOriWndProc)( hwnd, uMsg, wParam ,lParam );
+	return ::CallWindowProc(reinterpret_cast<WNDPROC>(g_lOriWndProc), hwnd, uMsg, wParam, lParam);
     //return CallWndProc( (WNDPROC) g_lOriWndProc , hwnd, uMsg, wParam ,lParam );
 }
 
@@ -168,7 +168,7 @@ UINT_PTR CptFileDialog::MyFolderProc(  HWND hdlg, UINT uiMsg, WPARAM wParam, LPA
 		if( 0== ::_tcscmp( wcsClassName1, wcsClassName2 ) )
 		{
 			g_bReplaced  = TRUE;
-			g_lOriWndProc  = ::SetWindowLong( ::GetParent( hdlg ), GWLP_WNDPROC , (LONG)_WndProc );
+			g_lOriWndProc = ::SetWindowLongPtr(::GetParent(hdlg), GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(_WndProc));
 		}
 	}
 	if( uiMsg == WM_NOTIFY )
