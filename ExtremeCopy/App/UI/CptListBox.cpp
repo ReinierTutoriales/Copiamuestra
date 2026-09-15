@@ -15,6 +15,9 @@ https://opensource.org/licenses/Apache-2.0
 #include "StdAfx.h"
 #include "CptListBox.h"
 #include <shellapi.h>
+#include <uxtheme.h>
+
+#pragma comment(lib,"uxtheme.lib")
 
 CptListBox::CptListBox(HWND hWnd)
 {
@@ -28,6 +31,12 @@ void CptListBox::Attach(HWND hWnd)
 {
 	CptCommCtrl::Attach(hWnd) ;
 
+	// Preserve the existing list box and its geometry while delegating its
+	// visual states and border rendering to the active Windows theme.
+	if(m_hWnd!=NULL)
+	{
+		::SetWindowTheme(m_hWnd,L"Explorer",NULL) ;
+	}
 }
 
 void CptListBox::UpdateHorizontalExtent() 
@@ -177,17 +186,6 @@ bool CptListBox::InsertString(int nIndex,const TCHAR* lpStr)
 
 	return bRet ;
 }
-//bool CptListBox::SetString(int nIndex,const TCHAR* pStr)
-//{
-//	bool bRet = false ;
-//
-//	if(m_hWnd!=NULL && pStr!=NULL)
-//	{
-//		//bRet = (CB_ERR!=::SendMessage(m_hWnd,LB_SETTEXT,nIndex,(LPARAM)pStr)) ;
-//	}
-//
-//	return bRet ;
-//}
 
 void CptListBox::Clear() 
 {
@@ -259,62 +257,4 @@ int CptListBox::GetItemCount()
 	
 	return nRet ;
 }
-
-/**
-int CptListBox::PreProcCtrlMsg(HWND hWnd,UINT nMsg,WPARAM wParam, LPARAM lParam)
-{
-	int nRet = CptCommCtrl::PreProcCtrlMsg(hWnd,nMsg,wParam,lParam) ;
-
-	switch(nMsg)
-	{
-		//case WM_DROPFILES:
-		//{
-		//	HDROP hDropInfo = (HDROP)wParam ;
-
-		//	const int fileCount = ::DragQueryFile(hDropInfo, (UINT)-1, NULL, 0);
-
-		//	TCHAR szFileName[MAX_PATH] = { 0 };
-		//	TCHAR szListString[MAX_PATH] = { 0 };
-
-		//	//if(hWnd==this->GetDlgItem(IDC_LIST_SOURCEFILE))
-		//	{
-		//		for (int i = 0; i < fileCount; ++i)
-		//		{
-		//			::DragQueryFile(hDropInfo, i, szFileName, sizeof(szFileName));
-
-		//			const int nListCount = this->GetItemCount() ;
-
-		//			int j = 0 ;
-		//			for(j=0;j<nListCount;++j)
-		//			{
-		//				szListString[0] = 0 ;
-		//				this->GetString(j,szListString) ;
-
-		//				CptString str1 = szListString ;
-		//				CptString str2 = szFileName ;
-
-		//				if(str1.CompareNoCase(str2)==0)
-		//				{
-		//					break ;
-		//				}
-		//			}
-
-		//			if(j==nListCount)
-		//			{
-		//				this->AddString(szFileName) ;
-		//			}
-		//		}
-		//	}
-		//	
-		//	::DragFinish(hDropInfo) ;
-		//}
-
-		//return 0 ;
-	}
-
-	
-
-	return nRet ;
-}
-/**/
 
