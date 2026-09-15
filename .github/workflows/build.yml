@@ -17,6 +17,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Normalize active source encodings
+        shell: pwsh
+        run: ./.github/scripts/normalize-active-sources.ps1
+
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
@@ -31,3 +35,13 @@ jobs:
           $exe = "ExtremeCopy/App/Build/Release/ExtremeCopy.exe"
           if (-not (Test-Path $exe)) { throw "Expected executable was not produced: $exe" }
           Get-Item $exe | Select-Object FullName, Length, LastWriteTime
+
+      - name: Upload normalized active sources
+        uses: actions/upload-artifact@v6
+        with:
+          name: normalized-active-sources
+          path: |
+            ExtremeCopy/Core/XCAsyncFileDataTransFilter.h
+            ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp
+            ExtremeCopy/Core/XCDestinationFilter.cpp
+            ExtremeCopy/App/XCConfiguration.cpp
