@@ -15,6 +15,9 @@ https://opensource.org/licenses/Apache-2.0
 #include "StdAfx.h"
 #include "CptComboBox.h"
 #include <shellapi.h>
+#include <uxtheme.h>
+
+#pragma comment(lib,"uxtheme.lib")
 
 CptComboBox::CptComboBox(void)
 {
@@ -84,6 +87,14 @@ int CptComboBox::GetItemCount()
 int CptComboBox::PreProcCtrlMsg(HWND hWnd,UINT nMsg,WPARAM wParam, LPARAM lParam)
 {
 	int nRet = CptCommCtrl::PreProcCtrlMsg(hWnd,nMsg,wParam,lParam) ;
+
+	// Preserve the existing combo box and layout while allowing the active
+	// Windows visual style to render its border, drop-down and interaction
+	// states. This is a presentation-only compatibility refresh.
+	if(m_hWnd!=NULL)
+	{
+		::SetWindowTheme(m_hWnd,L"Explorer",NULL) ;
+	}
 
 	switch(nMsg)
 	{
