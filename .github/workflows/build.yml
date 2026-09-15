@@ -1,0 +1,26 @@
+name: Windows x64 Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build ExtremeCopy x64 Release
+        shell: pwsh
+        run: |
+          msbuild ExtremeCopy.sln /m /restore /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
