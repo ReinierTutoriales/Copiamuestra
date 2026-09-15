@@ -229,7 +229,7 @@ void CXCConfiguration::SaveConfigDataToFile(const SConfigData& config) const
 	::_stprintf (szFileName,_T("%d"),config.nCopyBufSize) ;
 	::WritePrivateProfileString(pSectionName,_T("CopyBufSize"),szFileName,szIniFile) ;
 
-	::_stprintf (szFileName,_T("%u"),config.uLastCheckUpdateTime) ;
+	::_stprintf (szFileName,_T("%lld"),static_cast<long long>(config.uLastCheckUpdateTime)) ;
 	::WritePrivateProfileString(pSectionName,_T("LastCheckTime"),szFileName,szIniFile) ;
 #pragma warning(pop)
 	::WritePrivateProfileString(pSectionName,_T("AutoUpdate"),config.bAutoUpdate? _T("1"):_T("0"),szIniFile) ;
