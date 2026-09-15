@@ -23,4 +23,13 @@ jobs:
       - name: Build ExtremeCopy x64 Release
         shell: pwsh
         run: |
-          msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /verbosity:minimal
+          msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+
+      - name: Verify executable
+        shell: pwsh
+        run: |
+          $exe = "ExtremeCopy/App/Build/Release/ExtremeCopy.exe"
+          if (-not (Test-Path $exe)) {
+            throw "Expected executable was not produced: $exe"
+          }
+          Get-Item $exe | Select-Object FullName, Length, LastWriteTime
