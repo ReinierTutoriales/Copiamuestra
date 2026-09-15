@@ -15,7 +15,9 @@ https://opensource.org/licenses/Apache-2.0
 #include "StdAfx.h"
 #include "CptEditBox.h"
 #include <shellapi.h>
+#include <uxtheme.h>
 
+#pragma comment(lib,"uxtheme.lib")
 
 CptEditBox::CptEditBox(void)
 {
@@ -28,6 +30,14 @@ CptEditBox::~CptEditBox(void)
 void CptEditBox::Attach(HWND hWnd) 
 {
 	CptCommCtrl::Attach(hWnd) ;
+
+	// Keep the existing control and layout, but ask Windows to render it with
+	// the current Explorer visual style. On Windows 11 this avoids the legacy
+	// classic edit appearance without changing any application semantics.
+	if(m_hWnd!=NULL)
+	{
+		::SetWindowTheme(m_hWnd,L"Explorer",NULL) ;
+	}
 }
 
 void CptEditBox::SetLimitText(unsigned int nMax) 
