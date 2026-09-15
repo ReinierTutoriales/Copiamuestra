@@ -26,6 +26,7 @@ jobs:
       - name: Apply byte-preserving copy correctness corrections
         shell: pwsh
         run: |
+          # Retrigger 2026-09-15: COPY correctness pass.
           function Replace-AsciiExact([string]$path, [string]$oldText, [string]$newText, [int]$expected = 1) {
             $bytes = [System.IO.File]::ReadAllBytes($path)
             $old = [System.Text.Encoding]::ASCII.GetBytes($oldText)
