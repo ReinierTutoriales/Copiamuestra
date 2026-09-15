@@ -27,6 +27,18 @@ CptComboBox::~CptComboBox(void)
 {
 }
 
+void CptComboBox::Attach(HWND hWnd)
+{
+	CptCommCtrl::Attach(hWnd) ;
+
+	// Apply the active Windows visual style once when the control is attached,
+	// rather than reapplying it for every message dispatched to the combo box.
+	if(m_hWnd!=NULL)
+	{
+		::SetWindowTheme(m_hWnd,L"Explorer",NULL) ;
+	}
+}
+
 bool CptComboBox::AddString(const TCHAR* pStr) 
 {
 	bool bRet = false ;
@@ -87,14 +99,6 @@ int CptComboBox::GetItemCount()
 int CptComboBox::PreProcCtrlMsg(HWND hWnd,UINT nMsg,WPARAM wParam, LPARAM lParam)
 {
 	int nRet = CptCommCtrl::PreProcCtrlMsg(hWnd,nMsg,wParam,lParam) ;
-
-	// Preserve the existing combo box and layout while allowing the active
-	// Windows visual style to render its border, drop-down and interaction
-	// states. This is a presentation-only compatibility refresh.
-	if(m_hWnd!=NULL)
-	{
-		::SetWindowTheme(m_hWnd,L"Explorer",NULL) ;
-	}
 
 	switch(nMsg)
 	{

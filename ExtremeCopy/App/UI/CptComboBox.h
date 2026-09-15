@@ -25,6 +25,7 @@ public:
 	CptComboBox(void);
 	~CptComboBox(void);
 
+	void Attach(HWND hWnd) ;
 	bool AddString(const TCHAR* pStr) ;
 	void Clear() ;
 
