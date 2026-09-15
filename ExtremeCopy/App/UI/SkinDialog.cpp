@@ -16,7 +16,56 @@ https://opensource.org/licenses/Apache-2.0
 #include "SkinDialog.h"
 #include "..\XCConfiguration.h"
 
-#define ROUND_EDGE_SIZE		8
+#define ROUND_EDGE_SIZE 8
+#define TITLE_BAR_HEIGHT 22
+
+namespace
+{
+UINT GetDialogDpi(HWND hWnd)
+{
+	HMODULE hUser32 = ::GetModuleHandle(_T("user32.dll")) ;
+	if(hUser32!=NULL)
+	{
+		typedef UINT (WINAPI *GetDpiForWindowFn)(HWND) ;
+		GetDpiForWindowFn pGetDpiForWindow = reinterpret_cast<GetDpiForWindowFn>(
+			::GetProcAddress(hUser32,"GetDpiForWindow")) ;
+		if(pGetDpiForWindow!=NULL)
+		{
+			const UINT dpi = pGetDpiForWindow(hWnd) ;
+			if(dpi!=0)
+				return dpi ;
+		}
+	}
+
+	HDC hDC = ::GetDC(hWnd) ;
+	if(hDC!=NULL)
+	{
+		const int dpi = ::GetDeviceCaps(hDC,LOGPIXELSX) ;
+		::ReleaseDC(hWnd,hDC) ;
+		if(dpi>0)
+			return static_cast<UINT>(dpi) ;
+	}
+
+	return 96 ;
+}
+
+int ScaleMetric(HWND hWnd,int value)
+{
+	return ::MulDiv(value,static_cast<int>(GetDialogDpi(hWnd)),96) ;
+}
+
+void ApplyRoundedRegion(HWND hWnd,int width,int height,BOOL redraw)
+{
+	const int radius = ScaleMetric(hWnd,ROUND_EDGE_SIZE) ;
+	HRGN hRgn = ::CreateRoundRectRgn(0,0,width,height,radius,radius) ;
+	if(hRgn!=NULL)
+	{
+		// After a successful SetWindowRgn call Windows owns the region handle.
+		if(::SetWindowRgn(hWnd,hRgn,redraw)==0)
+			::DeleteObject(hRgn) ;
+	}
+}
+}
 
 CSkinDialog::CSkinDialog(int nDlgID,HWND hParentWnd):CptDialog(nDlgID,hParentWnd,CptMultipleLanguage::GetInstance()->GetResourceHandle()) 
 {
@@ -30,77 +79,10 @@ CSkinDialog::~CSkinDialog(void)
 }
 
 BOOL CSkinDialog::OnInitDialog()
-{//
-	/**
-	LONG lStyle = WS_POPUP ;
-
-	lStyle = ::GetWindowLong(this->GetSafeHwnd(),GWL_STYLE) ;
-
-	lStyle &= (~WS_OVERLAPPED) ;
-	lStyle |= WS_POPUP ;
-	//lStyle = lStyle&(~WS_BORDER ) ;
-
-	::SetWindowLong(this->GetSafeHwnd(),GWL_STYLE,lStyle) ;
-
-	lStyle = ::GetWindowLong(this->GetSafeHwnd(),GWL_EXSTYLE) ;
-
-	lStyle = lStyle&(~WS_EX_DLGMODALFRAME) ;
-	lStyle = lStyle&(~WS_EX_CLIENTEDGE) ;
-	lStyle = lStyle&(~WS_EX_WINDOWEDGE) ;
-	lStyle = lStyle&(~WS_EX_STATICEDGE) ;
-
-	::SetWindowLong(this->GetSafeHwnd(),GWL_EXSTYLE,lStyle) ;
-/**/
-
-	
-	//RECT rtWin ;
-
-
-	//this->DrawEdge() ;
-    //CRgn   rg;  
-    //rg.CreateRoundRectRgn(rt.left,   rt.top,   rt.right,   rt.bottom,   55,   55);  
-    //this->SetWindowRgn(rg,   FALSE); 
-
-	//HDC hDC = ::GetDC(this->GetSafeHwnd()) ;
-
-	//::DrawEllipse
-	////RECT rtClient ;
-
-	////::GetClientRect(this->GetSafeHwnd(),&rtClient) ;
-
-	////RECT rtTitle = {0,0,rtClient.right,22} ;
-
-	////::DrawCaption(this->GetSafeHwnd(),hDC,&rtTitle,
-	//::DeleteDC(hDC) ;
-
-	RECT   rt;
-
-	//GetWindowRect(this->GetSafeHwnd(),&rtWin);  
-	GetClientRect(this->GetSafeHwnd(),&rt);  
-
-
-	HRGN hRgn = ::CreateRoundRectRgn(rt.left,rt.top,rt.right,rt.bottom,ROUND_EDGE_SIZE,ROUND_EDGE_SIZE) ;
-	//::ValidateRgn(this->GetSafeHwnd(),hRgn) ;
-	//::InvalidateRgn(this->GetSafeHwnd(),hRgn,TRUE) ;
-	::SetWindowRgn(this->GetSafeHwnd(),hRgn,FALSE) ;
-	::DeleteObject(hRgn) ;
-
-	//
-	//LONG lStyle = ::GetWindowLong(this->GetSafeHwnd(),GWL_STYLE)|DWL_MSGRESULT ;
-	//::SetWindowLong(this->GetSafeHwnd(),GWL_STYLE,lStyle) ;
-/**
-	m_Shadow.Initialize(NULL) ;
-	
-	m_Shadow.Create(this->GetSafeHwnd(),CWndShadow::ES_ON) ;
-
-	m_Shadow.SetSize(2) ;
-	m_Shadow.SetSharpness(8) ;
-	/**/
-
-	//m_Shadow.SetPosition(0,0) ;
-	//m_Shadow.SetColor(RGB(0,100,20)) ;
-	//m_Shadow.SetDarkness() ;
-
+{
+	RECT rt = {0} ;
+	::GetClientRect(this->GetSafeHwnd(),&rt) ;
+	ApplyRoundedRegion(this->GetSafeHwnd(),rt.right-rt.left,rt.bottom-rt.top,FALSE) ;
 	return TRUE ;
 }
 
@@ -111,51 +93,26 @@ void CSkinDialog::SetDragMove(bool bDragMove)
 
 void CSkinDialog::SetWindowSize(const SptSize& size)
 {
-	SptRect rt ;
-
-	::GetClientRect(this->GetSafeHwnd(),rt.GetRECTPointer()) ;
-
 	::SetWindowRgn(this->GetSafeHwnd(),NULL,FALSE) ;
-
 	::SetWindowPos(this->GetSafeHwnd(),HWND_TOP,0,0,size.nWidth,size.nHeight,SWP_NOZORDER|SWP_NOMOVE) ;
-
-	HRGN hRgn = ::CreateRoundRectRgn(0,0,size.nWidth,size.nHeight,ROUND_EDGE_SIZE,ROUND_EDGE_SIZE) ;
-
-	::SetWindowRgn(this->GetSafeHwnd(),hRgn,TRUE) ;
-
-	::DeleteObject(hRgn) ;
-
-	rt.nTop = rt.GetHeight()-3 ;
-	rt.SetHeight(3) ;
-
+	ApplyRoundedRegion(this->GetSafeHwnd(),size.nWidth,size.nHeight,TRUE) ;
 	::InvalidateRect(this->GetSafeHwnd(),NULL,TRUE) ;
-
 	this->OnPaint() ;
 }
-
-//void CSkinDialog::OnControlStateChanged(int nControlID,EControlState NewState) 
-//{
-//}
 
 void CSkinDialog::OnPaint()
 {
 	if(m_bDrawTitleBar)
-	{
 		this->DrawTitleBar() ;
-	}
 
 	if(m_bDrawEdge)
-	{
 		this->DrawEdge() ;
-	}
-	
 }
 
 void CSkinDialog::SetDrawing(bool bDrawEdge,bool bDrawTitelBar)
 {
 	m_bDrawTitleBar = bDrawTitelBar ;
 	m_bDrawEdge = bDrawEdge ;
-
 	::InvalidateRect(this->GetSafeHwnd(),NULL,TRUE) ;
 	::UpdateWindow(this->GetSafeHwnd()) ;
 }
@@ -163,182 +120,111 @@ void CSkinDialog::SetDrawing(bool bDrawEdge,bool bDrawTitelBar)
 BOOL CSkinDialog::OnEraseBkgnd(HDC hDC)
 {
 	SptRect rt ;
-
 	::GetClientRect(this->GetSafeHwnd(),rt.GetRECTPointer()) ;
-
 	::FillRect(hDC,rt.GetRECTPointer(),(HBRUSH)::GetSysColorBrush(COLOR_BTNFACE)) ;
-	//::FillRect(hDC,rt.GetRECTPointer(),CXCConfiguration::GetInstance()->GetGlobalData()->hDlgBkBrush) ;
-
 	this->OnPaint() ;
-
 	return TRUE ;
 }
 
 void CSkinDialog::DrawEdge()
 {
-	HDC hDC = ::GetDC(this->GetSafeHwnd()) ;
+	HWND hWnd = this->GetSafeHwnd() ;
+	HDC hDC = ::GetDC(hWnd) ;
+	if(hDC==NULL)
+		return ;
 
-	RECT rt ;
-
-	::GetClientRect(this->GetSafeHwnd(),&rt) ;
-
-	HPEN hPen = ::CreatePen(PS_SOLID,2,RGB(83,128,165)) ;
-	
+	RECT rt = {0} ;
+	::GetClientRect(hWnd,&rt) ;
+	const int penWidth = ScaleMetric(hWnd,1) ;
+	const int radius = ScaleMetric(hWnd,ROUND_EDGE_SIZE+5) ;
+	HPEN hPen = ::CreatePen(PS_SOLID,penWidth>0?penWidth:1,::GetSysColor(COLOR_3DSHADOW)) ;
 	HBRUSH hOldBrush = (HBRUSH)::SelectObject(hDC,::GetStockObject(NULL_BRUSH)) ;
 	HPEN hOldPen = (HPEN)::SelectObject(hDC,hPen) ;
 
-	::RoundRect(hDC,rt.left,rt.top,rt.right,rt.bottom,ROUND_EDGE_SIZE+5,ROUND_EDGE_SIZE+5) ;
+	::RoundRect(hDC,rt.left,rt.top,rt.right,rt.bottom,radius,radius) ;
 
-	::SelectObject(hDC,hOldPen) ; 
-	::SelectObject(hDC,hOldBrush) ; 
-
+	::SelectObject(hDC,hOldPen) ;
+	::SelectObject(hDC,hOldBrush) ;
 	::DeleteObject(hPen) ;
-	//::DrawEdge(hDC,&rt,BDR_SUNKENOUTER,BF_DIAGONAL) ;
-
-	//::DeleteDC(hDC) ;
-	::ReleaseDC(this->GetSafeHwnd(),hDC) ;
+	::ReleaseDC(hWnd,hDC) ;
 }
 
 void CSkinDialog::DrawTitleBar()
 {
-	HDC hDC = ::GetDC(this->GetSafeHwnd()) ;
+	HWND hWnd = this->GetSafeHwnd() ;
+	HDC hDC = ::GetDC(hWnd) ;
+	if(hDC==NULL)
+		return ;
 
-	RECT rtClient ;
+	RECT rtClient = {0} ;
+	::GetClientRect(hWnd,&rtClient) ;
+	const int titleHeight = ScaleMetric(hWnd,TITLE_BAR_HEIGHT) ;
+	RECT rtTitle = {0,0,rtClient.right-rtClient.left,titleHeight} ;
 
-	::GetClientRect(this->GetSafeHwnd(),&rtClient) ;
+	// Use system colors instead of the legacy bitmap skin. This keeps the
+	// existing custom title-bar structure while matching current Windows UI.
+	::FillRect(hDC,&rtTitle,::GetSysColorBrush(COLOR_WINDOW)) ;
 
-	RECT rtTitle = {0,0,rtClient.right-rtClient.left,22} ;
-
-	//HINSTANCE hInstance = ::GetModuleHandle(NULL) ;
-
-	HBITMAP hBitmap = CptMultipleLanguage::GetInstance()->GetBitmap(IDB_BITMAP_TITLE) ;
-	//HBITMAP hBitmap = ::LoadBitmap(hInstance,MAKEINTRESOURCE(IDB_BITMAP_TITLE)) ;
-
-	HBRUSH hBrush = ::CreatePatternBrush(hBitmap) ;
-
-	::FillRect(hDC,&rtTitle,hBrush) ;
-
-	HICON hIcon = CptMultipleLanguage::GetInstance()->GetIcon(IDI_SMALL) ;//::LoadIcon(hInstance,MAKEINTRESOURCE(IDI_SMALL)) ;
-
-	::DrawIconEx(hDC,8,2,hIcon,20,20,0,NULL,DI_NORMAL);
-
-	//::DestroyIcon(hIcon) ;
-	//::DrawIcon(hDC,8,0,hIcon) ;
+	const int iconX = ScaleMetric(hWnd,8) ;
+	const int iconY = ScaleMetric(hWnd,2) ;
+	const int iconSize = ScaleMetric(hWnd,18) ;
+	HICON hIcon = CptMultipleLanguage::GetInstance()->GetIcon(IDI_SMALL) ;
+	if(hIcon!=NULL)
+		::DrawIconEx(hDC,iconX,iconY,hIcon,iconSize,iconSize,0,NULL,DI_NORMAL) ;
 
 	TCHAR szBuf[128] = {0} ;
-//	if(!m_strTitle.IsEmpty())
+	if(::GetWindowText(hWnd,szBuf,sizeof(szBuf)/sizeof(TCHAR))>0)
 	{
-		if(::GetWindowText(this->GetSafeHwnd(),szBuf,sizeof(szBuf)/sizeof(TCHAR))>0)
-		{
-			int nOldMode = ::SetBkMode(hDC,TRANSPARENT) ;
-			//int nOldMode = ::GetBkMode(hDC) ;
-			::TextOut(hDC,32,2,szBuf,(int)::_tcslen(szBuf)) ;
-			::SetBkMode(hDC,nOldMode) ;
-		}
+		const int fontHeight = -ScaleMetric(hWnd,12) ;
+		HFONT hFont = ::CreateFont(fontHeight,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
+			DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
+			DEFAULT_PITCH|FF_DONTCARE,_T("Segoe UI")) ;
+		HFONT hOldFont = NULL ;
+		if(hFont!=NULL)
+			hOldFont = (HFONT)::SelectObject(hDC,hFont) ;
+
+		const int oldMode = ::SetBkMode(hDC,TRANSPARENT) ;
+		const COLORREF oldColor = ::SetTextColor(hDC,::GetSysColor(COLOR_WINDOWTEXT)) ;
+		RECT rtText = {ScaleMetric(hWnd,32),0,rtTitle.right-ScaleMetric(hWnd,8),titleHeight} ;
+		::DrawText(hDC,szBuf,-1,&rtText,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX) ;
+		::SetTextColor(hDC,oldColor) ;
+		::SetBkMode(hDC,oldMode) ;
+
+		if(hOldFont!=NULL)
+			::SelectObject(hDC,hOldFont) ;
+		if(hFont!=NULL)
+			::DeleteObject(hFont) ;
 	}
 
-	::DestroyIcon(hIcon) ;
-	::DeleteObject(hBrush) ;
-	::DeleteObject(hBitmap) ;
-
-	//::DeleteDC(hDC) ;
-	::ReleaseDC(this->GetSafeHwnd(),hDC) ;
+	if(hIcon!=NULL)
+		::DestroyIcon(hIcon) ;
+	::ReleaseDC(hWnd,hDC) ;
 }
 
 int CSkinDialog::OnProcessMessage(HWND hWnd,UINT uMsg, WPARAM wParam, LPARAM lParam) 
 {
-	//Debug_Printf(_T("CSkinDialog::OnProcessMessage() hwnd=%p msg=%x wParam=%x lParam=%x"),hWnd,uMsg,wParam,lParam) ;
-
 	switch(uMsg)
 	{
-	case 0x00AE: //:WM_NCUAHDRAWCAPTION //彻底解决最大最小关闭按钮依然显示的问题:
-	case 0x00AF://:WM_NCUAHDRAWFRAME
-		return WM_NCPAINT;
+	case 0x00AE: // WM_NCUAHDRAWCAPTION
+	case 0x00AF: // WM_NCUAHDRAWFRAME
+		return WM_NCPAINT ;
 
-	case WM_SHOWWINDOW : 
-		::AnimateWindow(hWnd,1,AW_BLEND) ;// 为了窗体的阴影效果而存在的代码
+	case WM_SHOWWINDOW:
+		// The old 1 ms AnimateWindow blend predates modern composition and can
+		// introduce unnecessary redraw/flicker. Let DWM present the window.
 		::InvalidateRect(hWnd,NULL,TRUE) ;
 		::UpdateWindow(hWnd) ;
 		return 0 ;
 
 	case WM_LBUTTONDOWN:
-
 		if(m_bDragMove)
-		{
-			this->SendMessage(WM_SYSCOMMAND, SC_MOVE|0x0002,NULL) ;
-		}
-
+			this->SendMessage(WM_SYSCOMMAND,SC_MOVE|0x0002,NULL) ;
 		return 1 ;
 
-	//case WM_WINDOWPOSCHANGING:
-	//	return 1 ;
-
-	//case WM_SYSCOMMAND:
-	//	return 0 ;
-
 	case WM_SIZE:
-		{
-			
-		}
-		//Debug_Printf(_T("width=%d height=%d"),LOWORD(lParam),HIWORD(lParam)) ;
 		break ;
 
-	//case WM_NCACTIVATE:
-	////case WM_SETTEXT:
-	//case WM_NCLBUTTONUP:
-	//case WM_NCMOUSEMOVE:
-	//	break;
 	case WM_NCPAINT:
-		{
-			/**
-			HWND hWnd = this->GetSafeHwnd() ;
-			HDC hdc = GetWindowDC(hWnd); // Paint into this DC 
-			RECT rcWin; 
-			GetWindowRect(hWnd, &rcWin); 
-			OffsetRect( &rcWin, -rcWin.left, -rcWin.top ); 
-
-			HBRUSH hBrushFrame = ::CreateSolidBrush(RGB(181,211,255)) ;
-			HBITMAP hBitmap = ::LoadBitmap(::GetModuleHandle(NULL),MAKEINTRESOURCE(IDB_BITMAP_TITLE)) ;
-			HBRUSH hBrush = ::CreatePatternBrush(hBitmap) ;
-
-			//for(int i=0; i<4; i++) 
-			{ 
-				::FrameRect(hdc, &rcWin, hBrushFrame);
-				::InflateRect(&rcWin, -1, -1); 
-
-				
-				//::InflateRect(&rcWin, -1, -1); 
-			} 
-
-			RECT rtTitle = {rcWin.left,rcWin.top,rcWin.right,rcWin.top+30} ;
-				::FillRect(hdc,&rtTitle,hBrush) ;
-
-			::DeleteObject(hBrush) ;
-			::DeleteObject(hBrushFrame) ;
-			::DeleteObject(hBitmap) ;
-			ReleaseDC(hWnd, hdc);
-
-			//return 0 ;
-			
-			/**
-			//HDC hdc = ::GetDCEx(this->GetSafeHwnd(), (HRGN)wParam, DCX_WINDOW|DCX_INTERSECTRGN);
-			HDC hdc = ::GetDCEx(this->GetSafeHwnd(), (HRGN)wParam, DCX_WINDOW|DCX_INTERSECTRGN);
-			// Paint into this DC
-
-			RECT rt  ;
-			rt.top = -300 ;
-			rt.left = -300 ;
-			rt.bottom = 300 ;
-			rt.right = 300 ;
-			HBRUSH hBrush = ::CreateSolidBrush(RGB(255,0,0)) ;
-			::FillRect(hdc,&rt,hBrush) ;
-			::DeleteObject(hBrush) ;
-
-			::ReleaseDC(this->GetSafeHwnd(), hdc);
-			/**/
-			//this->DrawTitleBar() ;
-		}
-		//return FALSE ;
 		break ;
 	}
 
