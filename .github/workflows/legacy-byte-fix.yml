@@ -63,7 +63,7 @@ jobs:
           Replace-AsciiExact 'ExtremeCopy/App/UI/ptDialog.cpp' 'return (long)::SendMessage(m_hWnd,uMsg,wParam,lParam) ;' 'return ::SendMessage(m_hWnd,uMsg,wParam,lParam) ;'
           Replace-AsciiExact 'ExtremeCopy/App/UI/Hyperlink.cpp' '(HMENU)phs->ctlID' 'reinterpret_cast<HMENU>(static_cast<INT_PTR>(phs->ctlID))'
           Replace-AsciiExact 'ExtremeCopy/App/UI/ptWinToolTip.cpp' 'ti.uId    =(UINT)GetDlgItem(hWnd,id);' 'ti.uId    = reinterpret_cast<UINT_PTR>(GetDlgItem(hWnd,id));'
-          Replace-AsciiExact 'ExtremeCopy/App/UI/ptWinToolTip.cpp' 'ti.uId    =(UINT)hControlWnd;' 'ti.uId    = reinterpret_cast<UINT_PTR>(hControlWnd);'
+          Replace-AsciiExact 'ExtremeCopy/App/UI/ptWinToolTip.cpp' 'ti.uId    =(UINT)hControlWnd;' 'ti.uId    = reinterpret_cast<UINT_PTR>(hControlWnd);' 2
           Replace-AsciiExact 'ExtremeCopy/App/XCCopyTask.cpp' 'if((int)::ShellExecute(NULL,_T("runas"),_T("ExtremeCopy.exe"),strCmdLine.c_str(),strXCExeFileFolder.c_str(),SW_SHOW)>32)' 'if(reinterpret_cast<INT_PTR>(::ShellExecute(NULL,_T("runas"),_T("ExtremeCopy.exe"),strCmdLine.c_str(),strXCExeFileFolder.c_str(),SW_SHOW))>32)'
           Replace-AsciiExact 'ExtremeCopy/App/XCGlobal.cpp' 'EWebLink LinkType = (EWebLink)(int)pVoid ;' 'EWebLink LinkType = static_cast<EWebLink>(reinterpret_cast<INT_PTR>(pVoid)) ;'
           Replace-AsciiExact 'ExtremeCopy/App/XCGlobal.cpp' 'return ((int)::ShellExecute(NULL,_T("open"),pLink,NULL,NULL,SW_SHOWNORMAL)>32) ;' 'return (reinterpret_cast<INT_PTR>(::ShellExecute(NULL,_T("open"),pLink,NULL,NULL,SW_SHOWNORMAL))>32) ;'
