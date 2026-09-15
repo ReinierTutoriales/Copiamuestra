@@ -29,27 +29,32 @@ CXCAsyncFileDataTransFilter::~CXCAsyncFileDataTransFilter(void)
 
 	if(m_hThread!=NULL)
 	{
-		::SetEvent(m_hWriteDataReadyEvent) ;
-		::CloseHandle(m_hWriteDataReadyEvent) ;
-		m_hWriteDataReadyEvent = NULL ;
-
+		if(m_hWriteDataReadyEvent!=NULL)
+			::SetEvent(m_hWriteDataReadyEvent) ;
 		if(m_hWaitForFileBufNotFull!=NULL)
-		{
 			::SetEvent(m_hWaitForFileBufNotFull) ;
-			::CloseHandle(m_hWaitForFileBufNotFull) ;
-			m_hWaitForFileBufNotFull = NULL ;
-		}
-
 		if(m_hLinkEndForQueEmpty!=NULL)
-		{
 			::SetEvent(m_hLinkEndForQueEmpty) ;
-			::CloseHandle(m_hLinkEndForQueEmpty) ;
-			m_hLinkEndForQueEmpty = NULL ;
-		}
 
-		::WaitForSingleObject(m_hThread,3*1000) ;
+		::WaitForSingleObject(m_hThread,INFINITE) ;
 		::CloseHandle(m_hThread) ;
 		m_hThread = NULL ;
+	}
+
+	if(m_hWriteDataReadyEvent!=NULL)
+	{
+		::CloseHandle(m_hWriteDataReadyEvent) ;
+		m_hWriteDataReadyEvent = NULL ;
+	}
+	if(m_hWaitForFileBufNotFull!=NULL)
+	{
+		::CloseHandle(m_hWaitForFileBufNotFull) ;
+		m_hWaitForFileBufNotFull = NULL ;
+	}
+	if(m_hLinkEndForQueEmpty!=NULL)
+	{
+		::CloseHandle(m_hLinkEndForQueEmpty) ;
+		m_hLinkEndForQueEmpty = NULL ;
 	}
 }
 
@@ -69,27 +74,32 @@ void CXCAsyncFileDataTransFilter::OnStop()
 	m_bWriteThreadEnd = true;
 	if(m_hThread!=NULL)
 	{
-		::SetEvent(m_hWriteDataReadyEvent) ;
-		::CloseHandle(m_hWriteDataReadyEvent) ;
-		m_hWriteDataReadyEvent = NULL ;
-
+		if(m_hWriteDataReadyEvent!=NULL)
+			::SetEvent(m_hWriteDataReadyEvent) ;
 		if(m_hWaitForFileBufNotFull!=NULL)
-		{
 			::SetEvent(m_hWaitForFileBufNotFull) ;
-			::CloseHandle(m_hWaitForFileBufNotFull) ;
-			m_hWaitForFileBufNotFull = NULL ;
-		}
-
 		if(m_hLinkEndForQueEmpty!=NULL)
-		{
 			::SetEvent(m_hLinkEndForQueEmpty) ;
-			::CloseHandle(m_hLinkEndForQueEmpty) ;
-			m_hLinkEndForQueEmpty = NULL ;
-		}
 
-		::WaitForSingleObject(m_hThread,3*1000) ;
+		::WaitForSingleObject(m_hThread,INFINITE) ;
 		::CloseHandle(m_hThread) ;
 		m_hThread = NULL ;
+	}
+
+	if(m_hWriteDataReadyEvent!=NULL)
+	{
+		::CloseHandle(m_hWriteDataReadyEvent) ;
+		m_hWriteDataReadyEvent = NULL ;
+	}
+	if(m_hWaitForFileBufNotFull!=NULL)
+	{
+		::CloseHandle(m_hWaitForFileBufNotFull) ;
+		m_hWaitForFileBufNotFull = NULL ;
+	}
+	if(m_hLinkEndForQueEmpty!=NULL)
+	{
+		::CloseHandle(m_hLinkEndForQueEmpty) ;
+		m_hLinkEndForQueEmpty = NULL ;
 	}
 
 	CXCFileDataCacheTransFilter::OnStop() ;
@@ -142,7 +152,7 @@ int CXCAsyncFileDataTransFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterCm
 				m_FileDataQue.push_back(fd) ;
 
 				if(bNeedWaitUp)
-				{// »½ĞÑµÈ´ıµÄĞ´Ïß³Ì
+				{// å”¤é†’ç­‰å¾…çš„å†™çº¿ç¨‹
 					::SetEvent(m_hWriteDataReadyEvent) ;
 				}
 			}
@@ -151,7 +161,7 @@ int CXCAsyncFileDataTransFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterCm
 		}
 		break ;
 
-	case EDC_FileData: // ÎÄ¼şÊı¾İ
+	case EDC_FileData: // æ–‡ä»¶æ•°æ®
 		{
 			SDataPack_FileData* pFD = (SDataPack_FileData*)pFileData ;
 
@@ -168,14 +178,14 @@ int CXCAsyncFileDataTransFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterCm
 			}
 			
 			if(bNeedWaitUp)
-			{// »½ĞÑµÈ´ıµÄĞ´Ïß³Ì
+			{// å”¤é†’ç­‰å¾…çš„å†™çº¿ç¨‹
 				::SetEvent(m_hWriteDataReadyEvent) ;
 			}
 		}
 
 		return 0 ;
 
-	case EDC_FileOperationCompleted: // ×÷ÓÃÓÚ¸ÃÎÄ¼şµÄ²Ù×÷ÒÑÍê³É
+	case EDC_FileOperationCompleted: // ä½œç”¨äºè¯¥æ–‡ä»¶çš„æ“ä½œå·²å®Œæˆ
 		{
 			SDataPack_FileOperationCompleted* pFD = (SDataPack_FileOperationCompleted*)pFileData ;
 
@@ -185,7 +195,7 @@ int CXCAsyncFileDataTransFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterCm
 
 			ccci.CacheCompleteCmdList = pFD->CompletedFileInfoList ;
 
-			m_CacheCompleteCmdList.push_back(ccci) ; // Ö»°ÑÃüÁî»º³åÆğÀ´
+			m_CacheCompleteCmdList.push_back(ccci) ; // åªæŠŠå‘½ä»¤ç¼“å†²èµ·æ¥
 
 			{
 				CptAutoLock lock(&m_FileDataQueLock) ;
@@ -201,7 +211,7 @@ int CXCAsyncFileDataTransFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterCm
 				m_FileDataQue.push_back(fd) ;
 
 				if(bNeedWaitUp)
-				{// »½ĞÑµÈ´ıµÄĞ´Ïß³Ì
+				{// å”¤é†’ç­‰å¾…çš„å†™çº¿ç¨‹
 					::SetEvent(m_hWriteDataReadyEvent) ;
 				}
 			}
@@ -221,7 +231,7 @@ int CXCAsyncFileDataTransFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterCm
 
 			HANDLE hMsg = NULL ;
 
-			// ·ÅÈë¶ÓÁĞ£¬µÈ´ıÓÉOutputWorkThreadÍê³É
+			// æ”¾å…¥é˜Ÿåˆ—ï¼Œç­‰å¾…ç”±OutputWorkThreadå®Œæˆ
 
 			{
 				CptAutoLock lock(&m_FileDataQueLock) ;
@@ -229,7 +239,7 @@ int CXCAsyncFileDataTransFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterCm
 				hMsg = m_IdelMsgQue.AsynSendMsg(&mp) ;
 
 				if(m_FileDataQue.empty())
-				{// Èç¹û OutputWorkdThread ÒÑ¾²Ö¹£¬ÄÇÃ´½«Æä»½ĞÑ
+				{// å¦‚æœ OutputWorkdThread å·²é™æ­¢ï¼Œé‚£ä¹ˆå°†å…¶å”¤é†’
 					::SetEvent(m_hWriteDataReadyEvent) ;
 				}
 			}
@@ -245,8 +255,8 @@ int CXCAsyncFileDataTransFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterCm
 }
 
 int CXCAsyncFileDataTransFilter::ProcessLinkedEnd(SDataPack_FileOperationCompleted* pFoc) 
-{// ÒÆ³ıÒòÎªsource filterÑÓ³ÙÊÕµ½ EDC_FileDoneConfirm ÃüÁî£¬
-	//ËùÒıÆğÔÚ EDC_LinkEnded Ğ¯´øÁËĞèÒªÏòÏÂÔÙ´Î´¥·¢ EDC_FileOperationCompleted Ëù´øÀ´µÄÎÊÌâ
+{// ç§»é™¤å› ä¸ºsource filterå»¶è¿Ÿæ”¶åˆ° EDC_FileDoneConfirm å‘½ä»¤ï¼Œ
+	//æ‰€å¼•èµ·åœ¨ EDC_LinkEnded æºå¸¦äº†éœ€è¦å‘ä¸‹å†æ¬¡è§¦å‘ EDC_FileOperationCompleted æ‰€å¸¦æ¥çš„é—®é¢˜
 
 	CptAutoLock lock(&m_FileOperCompleteCacheLock) ;
 	CptAutoLock lock2(&m_FileDataQueLock) ;
@@ -308,7 +318,7 @@ void CXCAsyncFileDataTransFilter::OutputWorkThread()
 		PT_BREAK_IF(m_bWriteThreadEnd);
 		PT_BREAK_IF(!this->IsValideRunningState());
 
-		{// Õâ¸öÖĞÀ¨ºÅ²»ÄÜÈ¥µô£¬ ÒòÎªÕâ¶Î´úÂëÊÇÏß³Ì°²È«µÄ
+		{// è¿™ä¸ªä¸­æ‹¬å·ä¸èƒ½å»æ‰ï¼Œ å› ä¸ºè¿™æ®µä»£ç æ˜¯çº¿ç¨‹å®‰å…¨çš„
 			CptAutoLock lock(&m_FileDataQueLock) ;
 
 			bWait = m_FileDataQue.empty() ;
@@ -322,13 +332,13 @@ void CXCAsyncFileDataTransFilter::OutputWorkThread()
 			}
 		}
 
-		// ÒòÎª ´¦Àícomplete commandÃüÁîÊ±ÓĞÍ¨Öª source filter×öÊÍ·Å´¦Àí£¬ÇÒ¾­¹ı¶à¸ö¹«¹²¼ÓËø£¬ËùÒÔ»á³öÏÖËÀËøÇé¿ö
+		// å› ä¸º å¤„ç†complete commandå‘½ä»¤æ—¶æœ‰é€šçŸ¥ source filteråšé‡Šæ”¾å¤„ç†ï¼Œä¸”ç»è¿‡å¤šä¸ªå…¬å…±åŠ é”ï¼Œæ‰€ä»¥ä¼šå‡ºç°æ­»é”æƒ…å†µ
 		if(bWait && m_uFirstCompleteFileID+1<fd.uFileID && m_uFirstCompleteFileID>0)
-		{// Èç¹ûÓöµ½source file ÎÄ¼şÍê³ÉÃüÁîÓëĞÂµÄÎÄ¼şIDÒ»ÖÂµÄ»°£¬Ôò·¢ËÍÎÄ¼şÍê³ÉÃüÁîÏÈ
+		{// å¦‚æœé‡åˆ°source file æ–‡ä»¶å®Œæˆå‘½ä»¤ä¸æ–°çš„æ–‡ä»¶IDä¸€è‡´çš„è¯ï¼Œåˆ™å‘é€æ–‡ä»¶å®Œæˆå‘½ä»¤å…ˆ
 			m_uFirstCompleteFileID = 0 ;
 		}
 
-		PT_BREAK_IF(m_bWriteThreadEnd || !this->IsValideRunningState()); // ËæÊ±¿ÉÄÜÍË³öÏß³Ì
+		PT_BREAK_IF(m_bWriteThreadEnd || !this->IsValideRunningState()); // éšæ—¶å¯èƒ½é€€å‡ºçº¿ç¨‹
 
 		if(bWait)
 		{
@@ -344,7 +354,7 @@ void CXCAsyncFileDataTransFilter::OutputWorkThread()
 
 					m_IdelMsgQue.EndMsg(&nResult) ;
 
-					PT_BREAK_IF(true); // ÒòÎª×îºóµÄÃüÁîÒÑ·¢³ö£¬ËùÒÔ¾Í¿ÉÒÔÖ±½ÓÍË³öÏß³Ì
+					PT_BREAK_IF(true); // å› ä¸ºæœ€åçš„å‘½ä»¤å·²å‘å‡ºï¼Œæ‰€ä»¥å°±å¯ä»¥ç›´æ¥é€€å‡ºçº¿ç¨‹
 				}
 				else
 				{
@@ -353,13 +363,13 @@ void CXCAsyncFileDataTransFilter::OutputWorkThread()
 				}
 			}
 
-			PT_BREAK_IF(m_bWriteThreadEnd || !this->IsValideRunningState()); // ËæÊ±¿ÉÄÜÍË³öÏß³Ì
+			PT_BREAK_IF(m_bWriteThreadEnd || !this->IsValideRunningState()); // éšæ—¶å¯èƒ½é€€å‡ºçº¿ç¨‹
 
 			if(fd.nDataSize>0)
-			{// ÏÂÃæµÄFilter×öÒ»Ğ©¿ÕÏĞµÄ¹¤×÷£¬ÀıÈçµÈ´ıÒì²½IOÍê³É
+			{// ä¸‹é¢çš„Filteråšä¸€äº›ç©ºé—²çš„å·¥ä½œï¼Œä¾‹å¦‚ç­‰å¾…å¼‚æ­¥IOå®Œæˆ
 				m_pDownstreamFilter->OnDataTrans(this,EDC_FileData,NULL) ;
 
-				PT_BREAK_IF(m_bWriteThreadEnd || !this->IsValideRunningState()); // ËæÊ±¿ÉÄÜÍË³öÏß³Ì
+				PT_BREAK_IF(m_bWriteThreadEnd || !this->IsValideRunningState()); // éšæ—¶å¯èƒ½é€€å‡ºçº¿ç¨‹
 
 				CptAutoLock lock(&m_FileDataQueLock) ;
 
@@ -371,7 +381,7 @@ void CXCAsyncFileDataTransFilter::OutputWorkThread()
 			
 			dwWaitResult = ::WaitForSingleObject(m_hWriteDataReadyEvent,2000) ;
 
-			PT_BREAK_IF(m_bWriteThreadEnd || !this->IsValideRunningState()); // ËæÊ±¿ÉÄÜÍË³öÏß³Ì
+			PT_BREAK_IF(m_bWriteThreadEnd || !this->IsValideRunningState()); // éšæ—¶å¯èƒ½é€€å‡ºçº¿ç¨‹
 		}
 		else
 		{
@@ -397,27 +407,27 @@ void CXCAsyncFileDataTransFilter::OutputWorkThread()
 			}
 			_ASSERTE( _CrtCheckMemory( ) );
 
-			//CptAutoLock lock(&m_CreateFileLock) ; // ÒòÎª´´½¨ÎÄ¼şºÍĞ´ÎÄ¼şÊı¾İÊÇÁ½¸ö²»Í¬µÄÏß³Ì£¬ËùÒÔÕâÀïÎªÁËHDÓĞ×î´óĞ§ÂÊ£¬¹ÊÖ»ÄÜÍ¨ĞĞÆäÖĞÒ»¸ö
+			//CptAutoLock lock(&m_CreateFileLock) ; // å› ä¸ºåˆ›å»ºæ–‡ä»¶å’Œå†™æ–‡ä»¶æ•°æ®æ˜¯ä¸¤ä¸ªä¸åŒçš„çº¿ç¨‹ï¼Œæ‰€ä»¥è¿™é‡Œä¸ºäº†HDæœ‰æœ€å¤§æ•ˆç‡ï¼Œæ•…åªèƒ½é€šè¡Œå…¶ä¸­ä¸€ä¸ª
 
-EXCEPTION_RETRY_LOCALASYFILEDATA: // ÖØÊÔ
+EXCEPTION_RETRY_LOCALASYFILEDATA: // é‡è¯•
 
-			PT_BREAK_IF(m_bWriteThreadEnd || !this->IsValideRunningState()); // ËæÊ±¿ÉÄÜÍË³öÏß³Ì
+			PT_BREAK_IF(m_bWriteThreadEnd || !this->IsValideRunningState()); // éšæ—¶å¯èƒ½é€€å‡ºçº¿ç¨‹
 
 			pLastDataPointer = fd.pData ;
-			// ÏòÏÂÓÎ´«Êı¾İ
+			// å‘ä¸‹æ¸¸ä¼ æ•°æ®
 			switch(m_pDownstreamFilter->OnDataTrans(this,EDC_FileData,&fd))
 			{
 			case 0:
 				break ;
 
-			case ErrorHandlingFlag_Exit: // ÍË³ö
+			case ErrorHandlingFlag_Exit: // é€€å‡º
 				dwWaitResult= WAIT_FAILED ;
 				break ;
 
-			case ErrorHandlingFlag_Ignore: // ºöÂÔ
+			case ErrorHandlingFlag_Ignore: // å¿½ç•¥
 				break ;
 
-			case ErrorHandlingFlag_Retry: // ÖØÊÔ
+			case ErrorHandlingFlag_Retry: // é‡è¯•
 				goto EXCEPTION_RETRY_LOCALASYFILEDATA ;
 				break ;
 			}
