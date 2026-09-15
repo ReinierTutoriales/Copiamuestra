@@ -21,6 +21,7 @@ CptSkinButton::CptSkinButton(void)
 	m_hNormal = NULL ;
 	m_hHover = NULL ;
 	m_hDown = NULL ;
+	m_hDisable = NULL ;
 	m_hFont = NULL ;
 }
 
@@ -73,13 +74,11 @@ void CptSkinButton::SetBkBitmap(HBITMAP hNormal,HBITMAP hHover,HBITMAP hDown,HBI
 	if(m_hWnd!=NULL)
 	{
 		::InvalidateRect(m_hWnd,NULL,TRUE) ;
+
+		LONG_PTR nStyle = ::GetWindowLongPtr(m_hWnd,GWL_STYLE) ;
+		nStyle |= BS_OWNERDRAW ;
+		::SetWindowLongPtr(m_hWnd,GWL_STYLE,nStyle) ;
 	}
-
-	int nStyleEx = ::GetWindowLong(m_hWnd,GWL_STYLE) ;
-
-	nStyleEx |= BS_OWNERDRAW ;
-
-	::SetWindowLong(m_hWnd,GWL_STYLE,nStyleEx) ;
 }
 
 void CptSkinButton::Paint()
@@ -94,6 +93,7 @@ void CptSkinButton::Paint()
 			break ;
 
 		case ControlMouseStatus_Down:
+
 			this->Paint(m_hDown) ;
 			break ;
 
@@ -121,7 +121,15 @@ void CptSkinButton::Paint(HBITMAP hBitmap)
 		::GetClientRect(m_hWnd,&rtClient) ;
 
 		HDC hDC = ::GetDC(m_hWnd) ;
+		if(hDC==NULL)
+			return ;
+
 		HDC hCompatableDC = ::CreateCompatibleDC(hDC) ;
+		if(hCompatableDC==NULL)
+		{
+			::ReleaseDC(m_hWnd,hDC) ;
+			return ;
+		}
 
 		HBITMAP hOldBitmap = (HBITMAP)::SelectObject(hCompatableDC,hBitmap) ;
 
@@ -146,6 +154,7 @@ void CptSkinButton::Paint(HBITMAP hBitmap)
 			::SelectObject(hDC,hOldFont) ;
 		}
 
+		::SelectObject(hCompatableDC,hOldBitmap) ;
 		::DeleteDC(hCompatableDC) ;
 		//::DeleteDC(hDC) ;
 		::ReleaseDC(m_hWnd,hDC) ;
