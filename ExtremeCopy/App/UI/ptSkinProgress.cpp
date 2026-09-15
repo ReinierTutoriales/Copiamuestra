@@ -16,7 +16,7 @@ https://opensource.org/licenses/Apache-2.0
 #include "ptSkinProgress.h"
 #include "..\XCGlobal.h"
 
-CptSkinProgress::CptSkinProgress(void):m_nMaxValue(100),m_nMinValue(0),m_nCurValue(0),m_hBarBitmap(NULL),m_hResultBufBitmap(NULL)
+CptSkinProgress::CptSkinProgress(void):m_nMaxValue(100),m_nMinValue(0),m_nCurValue(0),m_hBarBitmap(NULL),m_hResultBufBitmap(NULL),m_hParentWnd(NULL)
 {
 	m_hPercentFont = ::CreateFont(11,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,
 		CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH|FF_DONTCARE,_T("Segoe UI")) ;
