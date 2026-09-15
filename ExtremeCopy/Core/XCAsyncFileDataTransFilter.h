@@ -16,6 +16,7 @@ https://opensource.org/licenses/Apache-2.0
 #include "xctransformfilter.h"
 #include "XCPin.h"
 #include "XCTransformFilter.h"
+#include <atomic>
 #include <deque>
 #include <set>
 #include "..\Common\ptThreadLock.h"
@@ -64,7 +65,7 @@ private:
 	CptMsgQue					m_IdelMsgQue ;
 
 	bool						m_bLinkEnded ;
-	bool						m_bWriteThreadEnd;
+	std::atomic<bool>			m_bWriteThreadEnd;
 
 	CptCritiSecLock				m_FileDataQueLock ;
 	CptCritiSecLock				m_FileOperCompleteCacheLock ;
