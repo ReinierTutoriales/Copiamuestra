@@ -27,7 +27,14 @@ jobs:
       - name: Build ExtremeCopy x64 Release
         shell: pwsh
         run: |
-          msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+          msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal /fl /flp:"logfile=build.log;verbosity=normal"
+
+      - name: Upload compiler diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: compiler-diagnostics
+          path: build.log
 
       - name: Verify executable
         shell: pwsh
