@@ -45,9 +45,21 @@ void EnableModernDpiAwareness()
 		typedef HRESULT (WINAPI *SetProcessDpiAwarenessFn)(int) ;
 		SetProcessDpiAwarenessFn pSetProcessDpiAwareness =
 			reinterpret_cast<SetProcessDpiAwarenessFn>(::GetProcAddress(hShcore,"SetProcessDpiAwareness")) ;
-		if(pSetProcessDpiAwareness!=NULL)
-			pSetProcessDpiAwareness(2) ;
+		if(pSetProcessDpiAwareness!=NULL && SUCCEEDED(pSetProcessDpiAwareness(2)))
+		{
+			::FreeLibrary(hShcore) ;
+			return ;
+		}
 		::FreeLibrary(hShcore) ;
+	}
+
+	if(hUser32!=NULL)
+	{
+		typedef BOOL (WINAPI *SetProcessDPIAwareFn)() ;
+		SetProcessDPIAwareFn pSetProcessDPIAware =
+			reinterpret_cast<SetProcessDPIAwareFn>(::GetProcAddress(hUser32,"SetProcessDPIAware")) ;
+		if(pSetProcessDPIAware!=NULL)
+			pSetProcessDPIAware() ;
 	}
 }
 }
