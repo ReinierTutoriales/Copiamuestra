@@ -162,9 +162,12 @@ void CXCLocalFileDestnationFilter::OnStop()
 			if((*it).uRemainSize==0 && (*it).bNoBuf )
 			{
 				_ASSERT(!bOverCurIt) ;
-				::SetFilePointer((*it).hFile, 0, NULL, FILE_BEGIN);
-				::SetEndOfFile((*it).hFile) ;
-				bDelete = false ;// 已完成的文件不删除
+				LARGE_INTEGER liFileSize ;
+				liFileSize.QuadPart = (LONGLONG)(*it).pSfi->nFileSize ;
+				if(::SetFilePointerEx((*it).hFile,liFileSize,NULL,FILE_BEGIN) && ::SetEndOfFile((*it).hFile))
+				{
+					bDelete = false ;
+				}// 已完成的文件不删除
 			}
 
 			::CloseHandle((*it).hFile) ;
