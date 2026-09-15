@@ -6,8 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  actions: write
+  contents: write
 
 jobs:
   build:
@@ -17,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
@@ -30,15 +31,95 @@ jobs:
         shell: pwsh
         run: |
           $exe = "ExtremeCopy/App/Build/Release/ExtremeCopy.exe"
-          if (-not (Test-Path $exe)) {
-            throw "Expected executable was not produced: $exe"
-          }
+          if (-not (Test-Path $exe)) { throw "Expected executable was not produced: $exe" }
           Get-Item $exe | Select-Object FullName, Length, LastWriteTime
 
-      - name: Dispatch pending byte-safe correctness pass
+      - name: Apply worker lifetime correction byte-safely
         if: github.actor != 'github-actions[bot]'
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          gh workflow run legacy-byte-fix.yml --ref main
+          $path = 'ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp'
+          $bytes = [IO.File]::ReadAllBytes($path)
+          $text = [Text.Encoding]::UTF8.GetString($bytes)
+          $old = @'
+	if(m_hThread!=NULL)
+	{
+		::SetEvent(m_hWriteDataReadyEvent) ;
+		::CloseHandle(m_hWriteDataReadyEvent) ;
+		m_hWriteDataReadyEvent = NULL ;
+
+		if(m_hWaitForFileBufNotFull!=NULL)
+		{
+			::SetEvent(m_hWaitForFileBufNotFull) ;
+			::CloseHandle(m_hWaitForFileBufNotFull) ;
+			m_hWaitForFileBufNotFull = NULL ;
+		}
+
+		if(m_hLinkEndForQueEmpty!=NULL)
+		{
+			::SetEvent(m_hLinkEndForQueEmpty) ;
+			::CloseHandle(m_hLinkEndForQueEmpty) ;
+			m_hLinkEndForQueEmpty = NULL ;
+		}
+
+		::WaitForSingleObject(m_hThread,3*1000) ;
+		::CloseHandle(m_hThread) ;
+		m_hThread = NULL ;
+	}
+'@
+          $new = @'
+	if(m_hThread!=NULL)
+	{
+		if(m_hWriteDataReadyEvent!=NULL)
+			::SetEvent(m_hWriteDataReadyEvent) ;
+		if(m_hWaitForFileBufNotFull!=NULL)
+			::SetEvent(m_hWaitForFileBufNotFull) ;
+		if(m_hLinkEndForQueEmpty!=NULL)
+			::SetEvent(m_hLinkEndForQueEmpty) ;
+
+		::WaitForSingleObject(m_hThread,INFINITE) ;
+		::CloseHandle(m_hThread) ;
+		m_hThread = NULL ;
+	}
+
+	if(m_hWriteDataReadyEvent!=NULL)
+	{
+		::CloseHandle(m_hWriteDataReadyEvent) ;
+		m_hWriteDataReadyEvent = NULL ;
+	}
+	if(m_hWaitForFileBufNotFull!=NULL)
+	{
+		::CloseHandle(m_hWaitForFileBufNotFull) ;
+		m_hWaitForFileBufNotFull = NULL ;
+	}
+	if(m_hLinkEndForQueEmpty!=NULL)
+	{
+		::CloseHandle(m_hLinkEndForQueEmpty) ;
+		m_hLinkEndForQueEmpty = NULL ;
+	}
+'@
+          $count = ([regex]::Matches($text,[regex]::Escape($old))).Count
+          if ($count -ne 2) { throw "Expected exactly 2 shutdown blocks, found $count" }
+          $text = $text.Replace($old,$new)
+          [IO.File]::WriteAllText($path,$text,(New-Object Text.UTF8Encoding($false)))
+          git diff --check
+          $changed = @(git diff --name-only)
+          if ($changed.Count -ne 1 -or $changed[0] -ne $path) { throw "Unexpected changed files: $changed" }
+          git diff -- $path
+
+      - name: Build patched x64 Release
+        if: github.actor != 'github-actions[bot]'
+        shell: pwsh
+        run: |
+          msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+
+      - name: Commit worker lifetime correction
+        if: github.actor != 'github-actions[bot]'
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp
+          git diff --cached --quiet && throw 'Worker lifetime correction was not staged.'
+          git commit -m 'fix: keep async worker events alive until thread exit'
+          git push origin HEAD:main
