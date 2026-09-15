@@ -148,11 +148,8 @@ void CptSkinProgress::SetValue(int nValue)
 	{
 		nValue = m_nMaxValue ;
 	}
-	else
-	{
-		m_nCurValue = nValue ;
-	}
 
+	m_nCurValue = nValue ;
 	this->Draw() ;
 }
 
