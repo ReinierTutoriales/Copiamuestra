@@ -25,16 +25,52 @@ jobs:
         run: |
           msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
 
+      - name: Build English resource DLL x64 Release
+        shell: pwsh
+        run: |
+          msbuild ExtremeCopy/App/Language/XCRes_ENU/XCRes_ENU64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+
+      - name: Build Spanish resource DLL x64 Release
+        shell: pwsh
+        run: |
+          msbuild ExtremeCopy/App/Language/XCRes_ESP/XCRes_ESP64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+
       - name: Package release
         shell: pwsh
         run: |
           $exe = "ExtremeCopy/App/Build/Release/ExtremeCopy.exe"
           if (-not (Test-Path $exe)) { throw "Expected executable was not produced: $exe" }
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+          $resourceDlls = Get-ChildItem "ExtremeCopy/App" -Recurse -File -Filter "XCRes_*.dll" |
+            Where-Object { $_.FullName -match '[\\/]Build[\\/]Release[\\/]' -and ($_.BaseName -eq 'XCRes_ENU' -or $_.BaseName -eq 'XCRes_ESP') }
+
+          $enu = $resourceDlls | Where-Object { $_.BaseName -eq 'XCRes_ENU' } | Select-Object -First 1
+          $esp = $resourceDlls | Where-Object { $_.BaseName -eq 'XCRes_ESP' } | Select-Object -First 1
+          if (-not $enu) { throw "English resource DLL XCRes_ENU.dll was not produced" }
+          if (-not $esp) { throw "Spanish resource DLL XCRes_ESP.dll was not produced" }
+
+          New-Item -ItemType Directory -Force -Path "dist/Language" | Out-Null
           Copy-Item $exe "dist/ExtremeCopy.exe"
-          Get-FileHash "dist/ExtremeCopy.exe" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  ExtremeCopy.exe" } | Set-Content -Encoding ascii "dist/SHA256SUMS.txt"
-          Compress-Archive -Path "dist/ExtremeCopy.exe","dist/SHA256SUMS.txt" -DestinationPath "ExtremeCopy-x64.zip" -Force
-          Get-Item $exe,"ExtremeCopy-x64.zip" | Select-Object FullName, Length, LastWriteTime
+          Copy-Item $enu.FullName "dist/Language/XCRes_ENU.dll"
+          Copy-Item $esp.FullName "dist/Language/XCRes_ESP.dll"
+
+          $required = @(
+            "dist/ExtremeCopy.exe",
+            "dist/Language/XCRes_ENU.dll",
+            "dist/Language/XCRes_ESP.dll"
+          )
+          foreach ($file in $required) {
+            if (-not (Test-Path $file)) { throw "Required runtime file missing from package: $file" }
+          }
+
+          $required | ForEach-Object {
+            $hash = Get-FileHash $_ -Algorithm SHA256
+            "$($hash.Hash.ToLower())  $($_.Substring(5).Replace('\\','/'))"
+          } | Set-Content -Encoding ascii "dist/SHA256SUMS.txt"
+
+          Compress-Archive -Path "dist/*" -DestinationPath "ExtremeCopy-x64.zip" -Force
+          Get-ChildItem "dist" -Recurse | Select-Object FullName, Length, LastWriteTime
+          Get-Item "ExtremeCopy-x64.zip" | Select-Object FullName, Length, LastWriteTime
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v6
