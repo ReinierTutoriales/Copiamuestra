@@ -29,6 +29,26 @@ function Replace-Exact([string]$Path, [string]$Old, [string]$New) {
   [IO.File]::WriteAllText($Path, $text, $utf8Out)
 }
 
+$async = 'ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp'
+$oldAsync = @'
+					pFoc->CompletedFileInfoList.erase(it2) ;
+					break ;
+				}
+		}
+
+		it2 = pFoc->CompletedFileInfoList.begin() ;
+'@
+$newAsync = @'
+					pFoc->CompletedFileInfoList.erase(it2) ;
+					break ;
+				}
+			}
+		}
+
+		it2 = pFoc->CompletedFileInfoList.begin() ;
+'@
+Replace-Exact $async $oldAsync $newAsync
+
 $dst = 'ExtremeCopy/Core/XCDestinationFilter.cpp'
 $oldStop = @'
 		if((*it).hFile!=INVALID_HANDLE_VALUE)
