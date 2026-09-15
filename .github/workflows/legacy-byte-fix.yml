@@ -23,7 +23,7 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Apply byte-preserving x64 corrections
+      - name: Apply byte-preserving copy correctness corrections
         shell: pwsh
         run: |
           function Replace-AsciiExact([string]$path, [string]$oldText, [string]$newText, [int]$expected = 1) {
@@ -38,7 +38,7 @@ jobs:
               }
               if ($ok) { $matches += $i; $i += $old.Length - 1 }
             }
-            if ($matches.Count -ne $expected) { throw "${path}: expected $expected matches for [$oldText], found $($matches.Count)" }
+            if ($matches.Count -ne $expected) { throw "${path}: expected $expected matches, found $($matches.Count)" }
             for ($m = $matches.Count - 1; $m -ge 0; $m--) {
               $pos = $matches[$m]
               $out = New-Object byte[] ($bytes.Length - $old.Length + $new.Length)
@@ -52,29 +52,86 @@ jobs:
             [System.IO.File]::WriteAllBytes($path, $bytes)
           }
 
-          Replace-AsciiExact 'ExtremeCopy/Common/WndShadow.h' 'LONG m_OriParentProc;' 'LONG_PTR m_OriParentProc;'
-          Replace-AsciiExact 'ExtremeCopy/Common/WndShadow.cpp' 'm_OriParentProc = GetWindowLong(hParentWnd, GWLP_WNDPROC);' 'm_OriParentProc = GetWindowLongPtr(hParentWnd, GWLP_WNDPROC);'
-          Replace-AsciiExact 'ExtremeCopy/Common/WndShadow.cpp' 'SetWindowLong(hParentWnd, GWLP_WNDPROC, (LONG)ParentProc);' 'SetWindowLongPtr(hParentWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ParentProc));'
-          Replace-AsciiExact 'ExtremeCopy/App/UI/CptFileDialog.cpp' 'LONG g_lOriWndProc = NULL;' 'LONG_PTR g_lOriWndProc = 0;'
-          Replace-AsciiExact 'ExtremeCopy/App/UI/CptFileDialog.cpp' 'return ((WNDPROC)g_lOriWndProc)( hwnd, uMsg, wParam ,lParam );' 'return ::CallWindowProc(reinterpret_cast<WNDPROC>(g_lOriWndProc), hwnd, uMsg, wParam, lParam);'
-          Replace-AsciiExact 'ExtremeCopy/App/UI/CptFileDialog.cpp' 'g_lOriWndProc  = ::SetWindowLong( ::GetParent( hdlg ), GWLP_WNDPROC , (LONG)_WndProc );' 'g_lOriWndProc = ::SetWindowLongPtr(::GetParent(hdlg), GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(_WndProc));'
-          Replace-AsciiExact 'ExtremeCopy/App/UI/ptDialog.h' 'long SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam) ;' 'LRESULT SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam) ;'
-          Replace-AsciiExact 'ExtremeCopy/App/UI/ptDialog.cpp' 'long CptDialog::SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam)' 'LRESULT CptDialog::SendMessage(UINT uMsg,WPARAM wParam,LPARAM lParam)'
-          Replace-AsciiExact 'ExtremeCopy/App/UI/ptDialog.cpp' 'return (long)::SendMessage(m_hWnd,uMsg,wParam,lParam) ;' 'return ::SendMessage(m_hWnd,uMsg,wParam,lParam) ;'
-          Replace-AsciiExact 'ExtremeCopy/App/UI/Hyperlink.cpp' '(HMENU)phs->ctlID' 'reinterpret_cast<HMENU>(static_cast<INT_PTR>(phs->ctlID))'
-          Replace-AsciiExact 'ExtremeCopy/App/UI/ptWinToolTip.cpp' 'ti.uId    =(UINT)GetDlgItem(hWnd,id);' 'ti.uId    = reinterpret_cast<UINT_PTR>(GetDlgItem(hWnd,id));'
-          Replace-AsciiExact 'ExtremeCopy/App/UI/ptWinToolTip.cpp' 'ti.uId    =(UINT)hControlWnd;' 'ti.uId    = reinterpret_cast<UINT_PTR>(hControlWnd);' 2
-          Replace-AsciiExact 'ExtremeCopy/App/XCCopyTask.cpp' 'if((int)::ShellExecute(NULL,_T("runas"),_T("ExtremeCopy.exe"),strCmdLine.c_str(),strXCExeFileFolder.c_str(),SW_SHOW)>32)' 'if(reinterpret_cast<INT_PTR>(::ShellExecute(NULL,_T("runas"),_T("ExtremeCopy.exe"),strCmdLine.c_str(),strXCExeFileFolder.c_str(),SW_SHOW))>32)'
-          Replace-AsciiExact 'ExtremeCopy/App/XCGlobal.cpp' 'EWebLink LinkType = (EWebLink)(int)pVoid ;' 'EWebLink LinkType = static_cast<EWebLink>(reinterpret_cast<INT_PTR>(pVoid)) ;'
-          Replace-AsciiExact 'ExtremeCopy/App/XCGlobal.cpp' 'return ((int)::ShellExecute(NULL,_T("open"),pLink,NULL,NULL,SW_SHOWNORMAL)>32) ;' 'return (reinterpret_cast<INT_PTR>(::ShellExecute(NULL,_T("open"),pLink,NULL,NULL,SW_SHOWNORMAL))>32) ;'
-          Replace-AsciiExact 'ExtremeCopy/App/XCNormalWndUIState.cpp' 'BOOL bCopyDone = (BOOL)pParam2 ;' 'BOOL bCopyDone = (pParam2 != NULL) ? TRUE : FALSE ;'
-          Replace-AsciiExact 'ExtremeCopy/App/XCTransApp.cpp' 'm_FailedFileMsgQue.PostMsg((void*)(OldFfi.nIndex+1)) ;' 'm_FailedFileMsgQue.PostMsg(reinterpret_cast<void*>(static_cast<INT_PTR>(OldFfi.nIndex + 1))) ;'
-          Replace-AsciiExact 'ExtremeCopy/App/XCTransApp.cpp' 'm_FailedFileMsgQue.RemoveMsg((void*)(OldFfi.nIndex+1)) ;' 'm_FailedFileMsgQue.RemoveMsg(reinterpret_cast<void*>(static_cast<INT_PTR>(OldFfi.nIndex + 1))) ;'
-          Replace-AsciiExact 'ExtremeCopy/App/XCTransApp.cpp' 'int nIndex = (int)p - 1 ;' 'int nIndex = static_cast<int>(reinterpret_cast<INT_PTR>(p)) - 1 ;'
-          Replace-AsciiExact 'ExtremeCopy/Core/XCFileDataBuffer.cpp' '::VirtualFree(m_pBlockBuf,m_nChunkSize,MEM_RELEASE) ;' '::VirtualFree(m_pBlockBuf,0,MEM_RELEASE) ;'
+          $async = 'ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp'
+          $oldShutdown = @'
+	if(m_hThread!=NULL)
+	{
+		::SetEvent(m_hWriteDataReadyEvent) ;
+		::CloseHandle(m_hWriteDataReadyEvent) ;
+		m_hWriteDataReadyEvent = NULL ;
+
+		if(m_hWaitForFileBufNotFull!=NULL)
+		{
+			::SetEvent(m_hWaitForFileBufNotFull) ;
+			::CloseHandle(m_hWaitForFileBufNotFull) ;
+			m_hWaitForFileBufNotFull = NULL ;
+		}
+
+		if(m_hLinkEndForQueEmpty!=NULL)
+		{
+			::SetEvent(m_hLinkEndForQueEmpty) ;
+			::CloseHandle(m_hLinkEndForQueEmpty) ;
+			m_hLinkEndForQueEmpty = NULL ;
+		}
+
+		::WaitForSingleObject(m_hThread,3*1000) ;
+		::CloseHandle(m_hThread) ;
+		m_hThread = NULL ;
+	}
+'@
+          $newShutdown = @'
+	if(m_hThread!=NULL)
+	{
+		if(m_hWriteDataReadyEvent!=NULL)
+			::SetEvent(m_hWriteDataReadyEvent) ;
+		if(m_hWaitForFileBufNotFull!=NULL)
+			::SetEvent(m_hWaitForFileBufNotFull) ;
+		if(m_hLinkEndForQueEmpty!=NULL)
+			::SetEvent(m_hLinkEndForQueEmpty) ;
+
+		::WaitForSingleObject(m_hThread,INFINITE) ;
+		::CloseHandle(m_hThread) ;
+		m_hThread = NULL ;
+	}
+
+	if(m_hWriteDataReadyEvent!=NULL)
+	{
+		::CloseHandle(m_hWriteDataReadyEvent) ;
+		m_hWriteDataReadyEvent = NULL ;
+	}
+	if(m_hWaitForFileBufNotFull!=NULL)
+	{
+		::CloseHandle(m_hWaitForFileBufNotFull) ;
+		m_hWaitForFileBufNotFull = NULL ;
+	}
+	if(m_hLinkEndForQueEmpty!=NULL)
+	{
+		::CloseHandle(m_hLinkEndForQueEmpty) ;
+		m_hLinkEndForQueEmpty = NULL ;
+	}
+'@
+          Replace-AsciiExact $async $oldShutdown $newShutdown 2
+
+          $dest = 'ExtremeCopy/Core/XCLocalFileSyncDestnationFilter.cpp'
+          Replace-AsciiExact $dest 'if(b)' 'if(b && dwWrite==(DWORD)nSize)' 1
+          Replace-AsciiExact $dest @'
+		else
+		{
+			Debug_Printf(_T("CXCLocalFileDestnationFilter::WriteFileData() failed")) ;
+'@ @'
+		else
+		{
+			if(b && dwWrite!=(DWORD)nSize)
+				::SetLastError(ERROR_WRITE_FAULT) ;
+			Debug_Printf(_T("CXCLocalFileDestnationFilter::WriteFileData() failed")) ;
+'@ 1
 
           git diff --check
+          $changed = @(git diff --name-only)
+          $expectedFiles = @($async, $dest)
+          if (@($changed | Where-Object { $_ -notin $expectedFiles }).Count -ne 0) { throw "Unexpected changed files: $changed" }
           git diff --stat
+          git diff -- $async $dest
 
       - name: Build patched x64 Release before commit
         shell: pwsh
@@ -83,12 +140,12 @@ jobs:
           $exe = 'ExtremeCopy/App/Build/Release/ExtremeCopy.exe'
           if (-not (Test-Path $exe)) { throw "Expected executable was not produced: $exe" }
 
-      - name: Commit validated corrections
+      - name: Commit validated copy correctness corrections
         shell: pwsh
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- ExtremeCopy/Common/WndShadow.h ExtremeCopy/Common/WndShadow.cpp ExtremeCopy/App/UI/CptFileDialog.cpp ExtremeCopy/App/UI/ptDialog.h ExtremeCopy/App/UI/ptDialog.cpp ExtremeCopy/App/UI/Hyperlink.cpp ExtremeCopy/App/UI/ptWinToolTip.cpp ExtremeCopy/App/XCCopyTask.cpp ExtremeCopy/App/XCGlobal.cpp ExtremeCopy/App/XCNormalWndUIState.cpp ExtremeCopy/App/XCTransApp.cpp ExtremeCopy/Core/XCFileDataBuffer.cpp
-          git diff --cached --quiet && throw 'Expected corrections were not staged.'
-          git commit -m 'fix: harden x64 pointer handling and buffer release'
+          git add -- ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp ExtremeCopy/Core/XCLocalFileSyncDestnationFilter.cpp
+          git diff --cached --quiet && throw 'Expected copy correctness corrections were not staged.'
+          git commit -m 'fix: harden copy write and worker shutdown correctness'
           git push origin HEAD:main
