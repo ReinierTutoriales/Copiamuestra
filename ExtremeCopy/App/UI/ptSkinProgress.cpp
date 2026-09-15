@@ -16,12 +16,10 @@ https://opensource.org/licenses/Apache-2.0
 #include "ptSkinProgress.h"
 #include "..\XCGlobal.h"
 
-CptSkinProgress::CptSkinProgress(void):m_nMaxValue(100),m_nMinValue(0),m_nCurValue(0),m_hResultBufBitmap(NULL)
+CptSkinProgress::CptSkinProgress(void):m_nMaxValue(100),m_nMinValue(0),m_nCurValue(0),m_hBarBitmap(NULL),m_hResultBufBitmap(NULL)
 {
-	m_hBarBitmap = ::CptMultipleLanguage::GetInstance()->GetBitmap(IDB_BITMAP_PROGRESSBAR) ;
-
 	m_hPercentFont = ::CreateFont(11,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,
-		CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH,NULL) ;
+		CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY,DEFAULT_PITCH|FF_DONTCARE,_T("Segoe UI")) ;
 }
 
 CptSkinProgress::~CptSkinProgress(void)
@@ -45,65 +43,61 @@ void CptSkinProgress::Draw(HDC hDC)
 {
 	_ASSERT(hDC!=NULL) ;
 
-	const int nUnitLen = 10 ;
+	const int nWidth = m_Rect.GetWidth() ;
+	const int nHeight = m_Rect.GetHeight() ;
+	if(nWidth<=0 || nHeight<=0)
+		return ;
 
-	HDC hMemDC = ::CreateCompatibleDC(hDC) ;
-	HDC hMemDC2 = ::CreateCompatibleDC(hDC) ;
+	RECT rtTrack = {m_Rect.nLeft,m_Rect.nTop,m_Rect.nLeft+nWidth,m_Rect.nTop+nHeight} ;
+	const int nRadius = max(2,min(nHeight/2,4)) ;
 
-	HBITMAP hOldBitmap = (HBITMAP)::SelectObject(hMemDC,m_hBarBitmap) ;
+	// Flat system-aware track replaces the legacy bitmap strip while keeping
+	// the exact existing progress rectangle and public control API.
+	HBRUSH hTrackBrush = ::CreateSolidBrush(::GetSysColor(COLOR_3DFACE)) ;
+	HPEN hBorderPen = ::CreatePen(PS_SOLID,1,::GetSysColor(COLOR_3DSHADOW)) ;
+	HBRUSH hOldBrush = (HBRUSH)::SelectObject(hDC,hTrackBrush) ;
+	HPEN hOldPen = (HPEN)::SelectObject(hDC,hBorderPen) ;
+	::RoundRect(hDC,rtTrack.left,rtTrack.top,rtTrack.right,rtTrack.bottom,nRadius,nRadius) ;
+	::SelectObject(hDC,hOldPen) ;
+	::SelectObject(hDC,hOldBrush) ;
+	::DeleteObject(hBorderPen) ;
+	::DeleteObject(hTrackBrush) ;
 
-	if(m_hResultBufBitmap==NULL)
+	const int nRange = m_nMaxValue-m_nMinValue ;
+	int nValidLen = 0 ;
+	if(nRange>0)
+		nValidLen = ::MulDiv(m_nCurValue-m_nMinValue,nWidth,nRange) ;
+
+	if(nValidLen>0)
 	{
-		m_hResultBufBitmap = ::CreateCompatibleBitmap(hDC,m_Rect.GetWidth(),m_Rect.GetHeight()) ;
+		RECT rtFill = rtTrack ;
+		rtFill.right = min(rtTrack.right,rtTrack.left+nValidLen) ;
+		HBRUSH hFillBrush = ::CreateSolidBrush(::GetSysColor(COLOR_HIGHLIGHT)) ;
+		HPEN hFillPen = ::CreatePen(PS_SOLID,1,::GetSysColor(COLOR_HIGHLIGHT)) ;
+		hOldBrush = (HBRUSH)::SelectObject(hDC,hFillBrush) ;
+		hOldPen = (HPEN)::SelectObject(hDC,hFillPen) ;
+		::RoundRect(hDC,rtFill.left,rtFill.top,rtFill.right,rtFill.bottom,nRadius,nRadius) ;
+		::SelectObject(hDC,hOldPen) ;
+		::SelectObject(hDC,hOldBrush) ;
+		::DeleteObject(hFillPen) ;
+		::DeleteObject(hFillBrush) ;
 	}
 
-	HBITMAP hOldBitmap2 = (HBITMAP)::SelectObject(hMemDC2,m_hResultBufBitmap) ;
-
-	::StretchBlt(hMemDC2,0,0,m_Rect.GetWidth(),m_Rect.GetHeight(),hMemDC,0,0,nUnitLen,16,SRCCOPY) ;
-
-	int nValidLen = (int)(((float)m_nCurValue/m_nMaxValue)*m_Rect.GetWidth()) ;
-
-	int nSpanCount = (nValidLen-20) ;
-
-	if(m_nCurValue>0)
-	{
-		// head
-		::StretchBlt(hMemDC2,0,0,nUnitLen,m_Rect.GetHeight(),hMemDC,2*nUnitLen,0,10,16,SRCCOPY) ;
-
-		if(nSpanCount>0)
-		{
-			::StretchBlt(hMemDC2,nUnitLen,0,nSpanCount,m_Rect.GetHeight(),hMemDC,3*nUnitLen,0,10,16,SRCCOPY) ;
-		}
-
-		nSpanCount = max(nSpanCount,0) ;
-		// tail 
-		::StretchBlt(hMemDC2,nSpanCount+nUnitLen,0,nUnitLen,m_Rect.GetHeight(),hMemDC,5*nUnitLen,0,10,16,SRCCOPY) ;
-
-	}
-
-	::BitBlt(hDC,m_Rect.nLeft,m_Rect.nTop,m_Rect.GetWidth(),m_Rect.GetHeight(),hMemDC2,0,0,SRCCOPY) ;
-
-	::SelectObject(hMemDC2,hOldBitmap2) ;
-	::SelectObject(hMemDC,hOldBitmap) ;
-
-	::DeleteDC(hMemDC2) ;
-	::DeleteDC(hMemDC) ;
-
-	{
-		HFONT hOldFont = (HFONT)::SelectObject(hDC,m_hPercentFont) ;
-		::SetBkMode(hDC,TRANSPARENT) ;
-		CptString strPercent ;
-		strPercent.Format(_T("%d%%"),m_nCurValue) ;
-
-		::DrawText(hDC,strPercent.c_str(),strPercent.GetLength(),m_Rect.GetRECTPointer(),DT_CENTER) ;
-
-		::SelectObject(hDC,hOldFont) ;
-	}
+	HFONT hOldFont = (HFONT)::SelectObject(hDC,m_hPercentFont) ;
+	const int nOldBkMode = ::SetBkMode(hDC,TRANSPARENT) ;
+	const COLORREF oldTextColor = ::SetTextColor(hDC,::GetSysColor(COLOR_WINDOWTEXT)) ;
+	CptString strPercent ;
+	const int nPercent = nRange>0 ? ::MulDiv(m_nCurValue-m_nMinValue,100,nRange) : 0 ;
+	strPercent.Format(_T("%d%%"),nPercent) ;
+	::DrawText(hDC,strPercent.c_str(),strPercent.GetLength(),m_Rect.GetRECTPointer(),DT_CENTER|DT_VCENTER|DT_SINGLELINE) ;
+	::SetTextColor(hDC,oldTextColor) ;
+	::SetBkMode(hDC,nOldBkMode) ;
+	::SelectObject(hDC,hOldFont) ;
 }
 
 void CptSkinProgress::Draw()
 {
-	if(m_hBarBitmap!=NULL && m_hParentWnd!=NULL && ::IsWindowVisible(m_hParentWnd))
+	if(m_hParentWnd!=NULL && ::IsWindowVisible(m_hParentWnd))
 	{
 		HDC hDC = ::GetDC(m_hParentWnd) ;
 
@@ -129,6 +123,11 @@ bool CptSkinProgress::SetRange(int nMax,int nMin)
 	{
 		m_nMaxValue=nMax;
 		m_nMinValue=nMin;
+
+		if(m_nCurValue<m_nMinValue)
+			m_nCurValue=m_nMinValue;
+		else if(m_nCurValue>m_nMaxValue)
+			m_nCurValue=m_nMaxValue;
 
 		this->Draw() ;
 
