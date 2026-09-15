@@ -43,7 +43,5 @@ private:
 
 	SptRect		m_Rect ;
 	HWND		m_hParentWnd ;
-	HBITMAP		m_hBarBitmap ;
-	HBITMAP		m_hResultBufBitmap ;
 	HFONT		m_hPercentFont ;
 };
