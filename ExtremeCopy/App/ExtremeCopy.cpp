@@ -27,7 +27,6 @@ namespace
 {
 void EnableModernDpiAwareness()
 {
-	// Resolve dynamically so the existing minimum-Windows contract is not changed.
 	HMODULE hUser32 = ::GetModuleHandle(_T("user32.dll")) ;
 	if(hUser32!=NULL)
 	{
@@ -35,15 +34,11 @@ void EnableModernDpiAwareness()
 		SetProcessDpiAwarenessContextFn pSetProcessDpiAwarenessContext =
 			reinterpret_cast<SetProcessDpiAwarenessContextFn>(::GetProcAddress(hUser32,"SetProcessDpiAwarenessContext")) ;
 
-		if(pSetProcessDpiAwarenessContext!=NULL)
-		{
-			// DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 == (HANDLE)-4.
-			if(pSetProcessDpiAwarenessContext(reinterpret_cast<HANDLE>(-4)))
-				return ;
-		}
+		if(pSetProcessDpiAwarenessContext!=NULL &&
+			pSetProcessDpiAwarenessContext(reinterpret_cast<HANDLE>(-4)))
+			return ;
 	}
 
-	// Vista/7-era fallback, also resolved dynamically for legacy compatibility.
 	HMODULE hShcore = ::LoadLibrary(_T("Shcore.dll")) ;
 	if(hShcore!=NULL)
 	{
@@ -51,7 +46,7 @@ void EnableModernDpiAwareness()
 		SetProcessDpiAwarenessFn pSetProcessDpiAwareness =
 			reinterpret_cast<SetProcessDpiAwarenessFn>(::GetProcAddress(hShcore,"SetProcessDpiAwareness")) ;
 		if(pSetProcessDpiAwareness!=NULL)
-			pSetProcessDpiAwareness(2) ; // PROCESS_PER_MONITOR_DPI_AWARE
+			pSetProcessDpiAwareness(2) ;
 		::FreeLibrary(hShcore) ;
 	}
 }
@@ -215,15 +210,47 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 					::XCRunModeXtremeTaskDlg(task,*pConfigData) ;
 					break ;
 
-				case SXCCopyTaskInfo::XCMD_VerifyResult:
-					::XCRunModeVerifyResult(task) ;
+				case SXCCopyTaskInfo::XCMD_CheckUpdate:
+					::XCRunCheckAndUpdate(task,*pConfigData) ;
 					break ;
+
+				default:
+					break ;
+
 				}
+			}
+			else
+			{// 命令行解析失败
+				CptString strErrorTitle = ::CptMultipleLanguage::GetInstance()->GetString(IDS_TITLE_ERROR) ;
+				CptString strCmdLineError = ::CptMultipleLanguage::GetInstance()->GetString(IDS_CMDLN_ERROR_CMDLNERROR) ;
+
+				CptString strTxt = strCmdLineError + strError + _T("\r\n");
+
+				CptMessageBox::ShowMessage(NULL,strTxt,strErrorTitle,CptMessageBox::Button_OK) ;
 			}
 		}
 
-		delete pConfigData ;
+		CptMultipleLanguage::Release() ;
+		CXCConfiguration::Release() ;
+
+		SAFE_DELETE_MEMORY(pConfigData) ;
 	}
 
-	return 0;
+	//Release_Printf(_T("")) ;
+	//		_CrtMemState cms2 ;
+	//_CrtMemCheckpoint(&cms2) ;
+
+	//_CrtMemState cms3 ;
+
+	//if(_CrtMemDifference(&cms3,&cms1,&cms2))
+	//{
+	//	Debug_Printf(_T("There is memory leak")) ;
+	//}
+	//else
+	//{
+	//	Debug_Printf(_T("There is no memory leak")) ;
+	//}
+
+
+	return 0 ;
 }
