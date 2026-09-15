@@ -108,18 +108,35 @@ void CXCAsyncFileDataTransFilter::OnStop()
 bool CXCAsyncFileDataTransFilter::OnInitialize() 
 {
 	m_bLinkEnded = false ;
+
+	if(!CXCFileDataCacheTransFilter::OnInitialize())
+	{
+		return false ;
+	}
+
 	if(m_hWriteDataReadyEvent==NULL)
 	{
 		m_hWriteDataReadyEvent = ::CreateEvent(NULL,FALSE,FALSE,NULL) ;
+		if(m_hWriteDataReadyEvent==NULL)
+		{
+			return false ;
+		}
 	}
 
 	if(m_hThread==NULL)
 	{
 		m_bWriteThreadEnd = false;
 		m_hThread = (HANDLE)::_beginthreadex(NULL,0,ThreadFunc,this,0,NULL) ;
+		if(m_hThread==NULL)
+		{
+			m_bWriteThreadEnd = true;
+			::CloseHandle(m_hWriteDataReadyEvent) ;
+			m_hWriteDataReadyEvent = NULL ;
+			return false ;
+		}
 	}
 
-	return CXCFileDataCacheTransFilter::OnInitialize() ;
+	return true ;
 }
 
 int CXCAsyncFileDataTransFilter::OnDataTrans(CXCFilterEventCB* pSender,EFilterCmd cmd,void* pFileData) 
@@ -281,7 +298,6 @@ int CXCAsyncFileDataTransFilter::ProcessLinkedEnd(SDataPack_FileOperationComplet
 					pFoc->CompletedFileInfoList.erase(it2) ;
 					break ;
 				}
-			}
 		}
 
 		it2 = pFoc->CompletedFileInfoList.begin() ;
