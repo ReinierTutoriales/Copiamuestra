@@ -1,0 +1,57 @@
+name: Byte-safe destination finalization fix
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/legacy-byte-fix-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+      - name: Patch exact legacy bytes
+        shell: pwsh
+        run: |
+          $path='ExtremeCopy/Core/XCDestinationFilter.cpp'
+          $enc=[Text.Encoding]::GetEncoding(28591)
+          $text=$enc.GetString([IO.File]::ReadAllBytes($path))
+          $old='::SetFilePointer((*it).hFile, 0, NULL, FILE_BEGIN);'+"`r`n"+"`t`t`t`t"+'::SetEndOfFile((*it).hFile) ;'+"`r`n"+"`t`t`t`t"+'bDelete = false ;'
+          $new='LARGE_INTEGER liFileSize ;'+"`r`n"+"`t`t`t`t"+'liFileSize.QuadPart = (LONGLONG)(*it).pSfi->nFileSize ;'+"`r`n"+"`t`t`t`t"+'if(::SetFilePointerEx((*it).hFile,liFileSize,NULL,FILE_BEGIN) && ::SetEndOfFile((*it).hFile))'+"`r`n"+"`t`t`t`t"+'{'+"`r`n"+"`t`t`t`t`t"+'bDelete = false ;'+"`r`n"+"`t`t`t`t"+'}'
+          if(-not $text.Contains($old)){$old=$old.Replace("`r`n","`n");$new=$new.Replace("`r`n","`n")}
+          $count=([regex]::Matches($text,[regex]::Escape($old))).Count
+          if($count -ne 1){throw "Expected exactly one unsafe finalization block, found $count"}
+          $text=$text.Replace($old,$new)
+          [IO.File]::WriteAllBytes($path,$enc.GetBytes($text))
+          git diff --check
+          $changed=@(git diff --name-only)
+          if($changed.Count -ne 1 -or $changed[0] -ne $path){throw "Unexpected changed files: $changed"}
+          git diff --numstat -- $path
+          git diff -- $path
+      - name: Build x64 Release
+        shell: pwsh
+        run: |
+          msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+          $exe='ExtremeCopy/App/Build/Release/ExtremeCopy.exe'
+          if(-not (Test-Path $exe)){throw "Expected executable was not produced: $exe"}
+      - name: Commit validated correction
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- ExtremeCopy/Core/XCDestinationFilter.cpp
+          git diff --cached --quiet
+          if($LASTEXITCODE -eq 0){throw 'Expected source correction was not staged.'}
+          git commit -m 'fix: preserve completed unbuffered files on stop'
+          git push origin HEAD:main
