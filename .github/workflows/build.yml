@@ -28,12 +28,12 @@ jobs:
       - name: Build English resource DLL x64 Release
         shell: pwsh
         run: |
-          msbuild ExtremeCopy/App/Language/XCRes_ENU/XCRes_ENU64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+          msbuild ExtremeCopy/App/Language/XCRes_ENU/XCRes_ENU64.vcxproj /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
 
       - name: Build Spanish resource DLL x64 Release
         shell: pwsh
         run: |
-          msbuild ExtremeCopy/App/Language/XCRes_ESP/XCRes_ESP64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+          msbuild ExtremeCopy/App/Language/XCRes_ESP/XCRes_ESP64.vcxproj /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
 
       - name: Package release
         shell: pwsh
@@ -41,9 +41,7 @@ jobs:
           $exe = "ExtremeCopy/App/Build/Release/ExtremeCopy.exe"
           if (-not (Test-Path $exe)) { throw "Expected executable was not produced: $exe" }
 
-          $resourceDlls = Get-ChildItem "ExtremeCopy/App" -Recurse -File -Filter "XCRes_*.dll" |
-            Where-Object { $_.FullName -match '[\\/]Build[\\/]Release[\\/]' -and ($_.BaseName -eq 'XCRes_ENU' -or $_.BaseName -eq 'XCRes_ESP') }
-
+          $resourceDlls = Get-ChildItem "ExtremeCopy/App/Build/x64/Release/Language" -File -Filter "XCRes_*.dll" -ErrorAction Stop
           $enu = $resourceDlls | Where-Object { $_.BaseName -eq 'XCRes_ENU' } | Select-Object -First 1
           $esp = $resourceDlls | Where-Object { $_.BaseName -eq 'XCRes_ESP' } | Select-Object -First 1
           if (-not $enu) { throw "English resource DLL XCRes_ENU.dll was not produced" }
