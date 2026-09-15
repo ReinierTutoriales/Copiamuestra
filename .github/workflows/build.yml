@@ -25,9 +25,21 @@ jobs:
         run: |
           msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
 
-      - name: Verify executable
+      - name: Package release
         shell: pwsh
         run: |
           $exe = "ExtremeCopy/App/Build/Release/ExtremeCopy.exe"
           if (-not (Test-Path $exe)) { throw "Expected executable was not produced: $exe" }
-          Get-Item $exe | Select-Object FullName, Length, LastWriteTime
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item $exe "dist/ExtremeCopy.exe"
+          Get-FileHash "dist/ExtremeCopy.exe" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  ExtremeCopy.exe" } | Set-Content -Encoding ascii "dist/SHA256SUMS.txt"
+          Compress-Archive -Path "dist/ExtremeCopy.exe","dist/SHA256SUMS.txt" -DestinationPath "ExtremeCopy-x64.zip" -Force
+          Get-Item $exe,"ExtremeCopy-x64.zip" | Select-Object FullName, Length, LastWriteTime
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ExtremeCopy-x64-Release
+          path: ExtremeCopy-x64.zip
+          if-no-files-found: error
+          retention-days: 30
