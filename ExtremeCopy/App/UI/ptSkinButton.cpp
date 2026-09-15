@@ -260,11 +260,9 @@ int CptSkinButton::PreProcParentMsg(HWND hWnd,UINT nMsg,WPARAM wParam, LPARAM lP
 
 		if(pIS!=NULL && pIS->hwndItem==m_hWnd && pIS->CtlType==ODT_BUTTON)
 		{
-			if(pIS->itemAction&ODA_SELECT || pIS->itemState==ODS_SELECTED)
+			if((pIS->itemAction & ODA_SELECT)!=0 || (pIS->itemState & ODS_SELECTED)!=0)
 			{
 				m_CurState.status.MouseStatus = ControlMouseStatus_Down ;
-				this->Paint() ;
-				m_CurState.status.MouseStatus = ControlMouseStatus_Hover ;
 				this->Paint() ;
 			}
 			else
