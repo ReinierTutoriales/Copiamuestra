@@ -1,0 +1,68 @@
+name: Legacy byte-safe source correction
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - .github/workflows/legacy-byte-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Patch XCConfiguration.cpp without transcoding
+        shell: pwsh
+        run: |
+          $path = 'ExtremeCopy/App/XCConfiguration.cpp'
+          $bytes = [System.IO.File]::ReadAllBytes($path)
+          $old = [System.Text.Encoding]::ASCII.GetBytes('_stprintf (szFileName,_T("%u"),config.uLastCheckUpdateTime) ;')
+          $new = [System.Text.Encoding]::ASCII.GetBytes('_stprintf (szFileName,_T("%lld"),static_cast<long long>(config.uLastCheckUpdateTime)) ;')
+
+          function Find-Sequence([byte[]]$haystack, [byte[]]$needle) {
+            $matches = @()
+            for ($i = 0; $i -le $haystack.Length - $needle.Length; $i++) {
+              $ok = $true
+              for ($j = 0; $j -lt $needle.Length; $j++) {
+                if ($haystack[$i + $j] -ne $needle[$j]) { $ok = $false; break }
+              }
+              if ($ok) { $matches += $i }
+            }
+            return $matches
+          }
+
+          $matches = @(Find-Sequence $bytes $old)
+          if ($matches.Count -ne 1) {
+            throw "Expected exactly one legacy timestamp format sequence; found $($matches.Count)."
+          }
+
+          $pos = $matches[0]
+          $out = New-Object byte[] ($bytes.Length - $old.Length + $new.Length)
+          [Array]::Copy($bytes, 0, $out, 0, $pos)
+          [Array]::Copy($new, 0, $out, $pos, $new.Length)
+          $tailSrc = $pos + $old.Length
+          $tailDst = $pos + $new.Length
+          [Array]::Copy($bytes, $tailSrc, $out, $tailDst, $bytes.Length - $tailSrc)
+          [System.IO.File]::WriteAllBytes($path, $out)
+
+          git diff --check
+          git diff --numstat -- $path
+          git diff -- $path
+
+      - name: Commit exact correction
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- ExtremeCopy/App/XCConfiguration.cpp
+          git diff --cached --quiet && throw 'Expected source correction was not staged.'
+          git commit -m 'fix: serialize update timestamp safely on x64'
+          git push origin HEAD:main
