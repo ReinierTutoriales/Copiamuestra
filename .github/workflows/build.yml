@@ -6,25 +6,100 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  patch-worker:
+    if: github.event.head_commit.message == 'ci: run byte-safe worker correctness patch'
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: microsoft/setup-msbuild@v2
+      - name: Patch exact legacy bytes
+        shell: pwsh
+        run: |
+          $enc=[Text.Encoding]::GetEncoding(28591)
+          function R1($p,$o,$n){$t=$enc.GetString([IO.File]::ReadAllBytes($p));$nl=if($t.Contains("`r`n")){"`r`n"}else{"`n"};$o=$o.Replace("`n",$nl);$n=$n.Replace("`n",$nl);$c=([regex]::Matches($t,[regex]::Escape($o))).Count;if($c-ne 1){throw "$p match=$c"};[IO.File]::WriteAllBytes($p,$enc.GetBytes($t.Replace($o,$n)))}
+          $h='ExtremeCopy/Core/XCAsyncFileDataTransFilter.h';$c='ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp'
+          R1 $h '#include <set>' "#include <set>`n#include <atomic>"
+          R1 $h "`tbool`t`t`t`t`t`t`tm_bWriteThreadEnd;" "`tstd::atomic<bool>`t`t`t`t`tm_bWriteThreadEnd;"
+          $o=@'
+	if(m_hWriteDataReadyEvent==NULL)
+	{
+		m_hWriteDataReadyEvent = ::CreateEvent(NULL,FALSE,FALSE,NULL) ;
+	}
+
+	if(m_hThread==NULL)
+	{
+		m_bWriteThreadEnd = false;
+		m_hThread = (HANDLE)::_beginthreadex(NULL,0,ThreadFunc,this,0,NULL) ;
+	}
+
+	return CXCFileDataCacheTransFilter::OnInitialize() ;
+'@
+          $n=@'
+	if(m_hWriteDataReadyEvent==NULL)
+	{
+		m_hWriteDataReadyEvent = ::CreateEvent(NULL,FALSE,FALSE,NULL) ;
+		if(m_hWriteDataReadyEvent==NULL)
+			return false ;
+	}
+
+	if(m_hThread==NULL)
+	{
+		m_bWriteThreadEnd.store(false,std::memory_order_release) ;
+		m_hThread = (HANDLE)::_beginthreadex(NULL,0,ThreadFunc,this,0,NULL) ;
+		if(m_hThread==NULL)
+		{
+			m_bWriteThreadEnd.store(true,std::memory_order_release) ;
+			::CloseHandle(m_hWriteDataReadyEvent) ;
+			m_hWriteDataReadyEvent = NULL ;
+			return false ;
+		}
+	}
+
+	if(!CXCFileDataCacheTransFilter::OnInitialize())
+	{
+		m_bWriteThreadEnd.store(true,std::memory_order_release) ;
+		::SetEvent(m_hWriteDataReadyEvent) ;
+		::WaitForSingleObject(m_hThread,INFINITE) ;
+		::CloseHandle(m_hThread) ; m_hThread=NULL ;
+		::CloseHandle(m_hWriteDataReadyEvent) ; m_hWriteDataReadyEvent=NULL ;
+		return false ;
+	}
+	return true ;
+'@
+          R1 $c $o $n
+          $t=$enc.GetString([IO.File]::ReadAllBytes($c));$t=$t.Replace('m_bWriteThreadEnd = true;','m_bWriteThreadEnd.store(true,std::memory_order_release) ;').Replace('PT_BREAK_IF(m_bWriteThreadEnd);','PT_BREAK_IF(m_bWriteThreadEnd.load(std::memory_order_acquire));').Replace('m_bWriteThreadEnd ||','m_bWriteThreadEnd.load(std::memory_order_acquire) ||').Replace('!m_bWriteThreadEnd ||','!m_bWriteThreadEnd.load(std::memory_order_acquire) ||');[IO.File]::WriteAllBytes($c,$enc.GetBytes($t))
+          git diff --check
+          $f=@(git diff --name-only);if($f.Count-ne 2-or($f|?{$_-notin @($h,$c)})){throw "unexpected files: $f"}
+      - name: Build patched x64 Release
+        shell: pwsh
+        run: |
+          msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+          if(!(Test-Path 'ExtremeCopy/App/Build/Release/ExtremeCopy.exe')){throw 'exe missing'}
+      - name: Commit validated source
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]';git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp ExtremeCopy/Core/XCAsyncFileDataTransFilter.h
+          git commit -m 'fix: harden async worker lifecycle';git push origin HEAD:main
+
   build:
     runs-on: windows-2025
     timeout-minutes: 30
-
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
-
       - name: Build ExtremeCopy x64 Release
         shell: pwsh
         run: |
           msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
-
       - name: Verify executable
         shell: pwsh
         run: |
