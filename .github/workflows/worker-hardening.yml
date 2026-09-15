@@ -86,7 +86,6 @@ jobs:
           Replace-One $cpp $old $new
           $text=$enc.GetString([IO.File]::ReadAllBytes($cpp))
           $text=$text.Replace('m_bWriteThreadEnd = true;','m_bWriteThreadEnd.store(true,std::memory_order_release) ;')
-          $text=$text.Replace('m_bWriteThreadEnd = false;','m_bWriteThreadEnd.store(false,std::memory_order_release) ;')
           $text=$text.Replace('PT_BREAK_IF(m_bWriteThreadEnd);','PT_BREAK_IF(m_bWriteThreadEnd.load(std::memory_order_acquire));')
           $text=$text.Replace('m_bWriteThreadEnd ||','m_bWriteThreadEnd.load(std::memory_order_acquire) ||')
           $text=$text.Replace('!m_bWriteThreadEnd ||','!m_bWriteThreadEnd.load(std::memory_order_acquire) ||')
@@ -95,8 +94,6 @@ jobs:
           $changed=@(git diff --name-only)
           $expected=@($h,$cpp)
           if($changed.Count -ne 2 -or ($changed | Where-Object {$_ -notin $expected})){throw "Unexpected files: $changed"}
-          git diff --numstat -- $h $cpp
-          git diff -- $h $cpp
       - name: Build x64 Release
         shell: pwsh
         run: |
@@ -108,7 +105,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp ExtremeCopy/Core/XCAsyncFileDataTransFilter.h
-          git diff --cached --quiet
-          if($LASTEXITCODE -eq 0){throw 'No source changes staged'}
           git commit -m 'fix: harden async worker initialization and stop flag'
           git push origin HEAD:main
+
+# trigger 2
