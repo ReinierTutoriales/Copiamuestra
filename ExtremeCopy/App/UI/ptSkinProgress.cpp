@@ -105,24 +105,26 @@ void CptSkinProgress::SetParent(HWND hWnd)
 
 bool CptSkinProgress::SetRange(int nMax,int nMin)
 {
-	bool bRet = false ;
+	if(nMax==nMin)
+		return false ;
 
-	if(nMax>nMin)
+	if(nMax<nMin)
 	{
-		m_nMaxValue=nMax;
-		m_nMinValue=nMin;
-
-		if(m_nCurValue<m_nMinValue)
-			m_nCurValue=m_nMinValue;
-		else if(m_nCurValue>m_nMaxValue)
-			m_nCurValue=m_nMaxValue;
-
-		this->Draw() ;
-
-		bRet = true ;
+		const int nTmp = nMax ;
+		nMax = nMin ;
+		nMin = nTmp ;
 	}
 
-	return bRet ;
+	m_nMaxValue=nMax;
+	m_nMinValue=nMin;
+
+	if(m_nCurValue<m_nMinValue)
+		m_nCurValue=m_nMinValue;
+	else if(m_nCurValue>m_nMaxValue)
+		m_nCurValue=m_nMaxValue;
+
+	this->Draw() ;
+	return true ;
 }
 
 void CptSkinProgress::SetValue(int nValue)
