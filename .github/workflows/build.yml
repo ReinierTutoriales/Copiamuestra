@@ -31,19 +31,20 @@ jobs:
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSINSTALL=%%i"
           call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=amd64 -host_arch=amd64
           if errorlevel 1 exit /b 1
-          if not exist "ExtremeCopy\App\Build\x64\Release\Language" mkdir "ExtremeCopy\App\Build\x64\Release\Language"
+          set "LANGOUT=%GITHUB_WORKSPACE%\ExtremeCopy\App\Build\x64\Release\Language"
+          if not exist "%LANGOUT%" mkdir "%LANGOUT%"
 
           pushd "ExtremeCopy\App\Language\XCRes_ENU"
           rc /nologo /d _WIN64 /d _UNICODE /d UNICODE /fo XCRes_ENU.res XCRes_ENU.rc
           if errorlevel 1 exit /b 1
-          link /nologo /dll /noentry /machine:x64 /out:"..\..\..\Build\x64\Release\Language\XCRes_ENU.dll" XCRes_ENU.res
+          link /nologo /dll /noentry /machine:x64 /out:"%LANGOUT%\XCRes_ENU.dll" XCRes_ENU.res
           if errorlevel 1 exit /b 1
           popd
 
           pushd "ExtremeCopy\App\Language\XCRes_ESP"
           rc /nologo /d _WIN64 /d _UNICODE /d UNICODE /fo XCRes_ESP.res XCRes_ESP.rc
           if errorlevel 1 exit /b 1
-          link /nologo /dll /noentry /machine:x64 /out:"..\..\..\Build\x64\Release\Language\XCRes_ESP.dll" XCRes_ESP.res
+          link /nologo /dll /noentry /machine:x64 /out:"%LANGOUT%\XCRes_ESP.dll" XCRes_ESP.res
           if errorlevel 1 exit /b 1
           popd
 
