@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   build:
@@ -33,3 +34,11 @@ jobs:
             throw "Expected executable was not produced: $exe"
           }
           Get-Item $exe | Select-Object FullName, Length, LastWriteTime
+
+      - name: Dispatch pending byte-safe correctness pass
+        if: github.actor != 'github-actions[bot]'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run legacy-byte-fix.yml --ref main
