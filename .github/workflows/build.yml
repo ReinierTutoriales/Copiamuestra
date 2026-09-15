@@ -6,42 +6,25 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  correctness:
-    if: ${{ github.event.head_commit.message == 'ci: apply correctness batch' }}
-    runs-on: windows-2025
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: microsoft/setup-msbuild@v2
-      - name: Apply byte-safe corrections
-        shell: pwsh
-        run: ./.github/scripts/apply-correctness.ps1
-      - name: Build corrected x64 Release
-        shell: pwsh
-        run: msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
-      - name: Commit corrected sources
-        shell: pwsh
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ExtremeCopy/Core/XCAsyncFileDataTransFilter.h ExtremeCopy/Core/XCAsyncFileDataTransFilter.cpp ExtremeCopy/Core/XCDestinationFilter.cpp ExtremeCopy/App/XCConfiguration.cpp
-          git commit -m "fix: finish copy correctness hardening"
-          git push origin HEAD:main
-
   build:
     runs-on: windows-2025
     timeout-minutes: 30
+
     steps:
-      - uses: actions/checkout@v5
-      - uses: microsoft/setup-msbuild@v2
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
       - name: Build ExtremeCopy x64 Release
         shell: pwsh
-        run: msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+        run: |
+          msbuild ExtremeCopy/App/ExtremeCopy64.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false /verbosity:minimal
+
       - name: Verify executable
         shell: pwsh
         run: |
